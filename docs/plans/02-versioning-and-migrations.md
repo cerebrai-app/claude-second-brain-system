@@ -72,12 +72,37 @@ How to revert (normally `git revert` of the step's commit).
 
 1. **Detect.** At session start (or via an explicit command), compare `manifest.core_version` to the plugin's core version.
    Equal → done. Repo ahead of plugin → stop and tell the user to update the plugin. Behind → continue.
-2. **Plan.** List the chain `N-to-N+1 ... M-1-to-M`, show the user the summaries, and note any `breaking: true` steps.
+2. **Plan and dry run.** List the chain `N-to-N+1 ... M-1-to-M`, show the user the summaries, and note any `breaking: true` steps.
 3. **Preflight.** Require a clean git working tree in the brain repo; otherwise stop.
-4. **Apply per step.** Follow the doc's Steps, resolve Judgement calls (asking the user where specified), run Verify.
+4. **Confirm, then apply per step.** After the dry run summary is approved, Follow the doc's Steps, resolve Judgement calls (asking the user where specified), run Verify.
 5. **Record.** Update `core_version` and append to `migrations` in the manifest.
 6. **Commit per step** (`migrate: core 1 -> 2`) so each is reviewable and revertible. Do not push without the user's say-so.
 7. **Failure.** If Verify fails, stop, leave the working tree uncommitted for that step, and report. The user can discard with git.
+
+## Dry run
+
+Before applying a migration, the agent produces a dry run: it follows the migration doc's Steps **without modifying any
+item or definition**, and records what it would do.
+
+- **Output file:** `.brain/migrations/dry-runs/<from>-to-<to>-<timestamp>.md` in the brain repo. It is written only
+  into that directory and is not part of the migration commit unless the user chooses to keep it.
+- **Contents:**
+  1. **Summary** (top of file): plain-language overview of what will change, counts (files touched, items changed,
+     definitions changed), anything that needs a user decision, and the **risk level**.
+  2. **Risk level:** `low` | `medium` | `high`, with a one-to-three-line justification.
+  3. **Planned changes:** per file, the proposed diff (or a description for large mechanical changes).
+  4. **Judgement calls:** each decision the agent would need, with its proposed answer.
+  5. **Unhandled items:** things flagged for human attention (e.g. script adapters, hooks).
+- **Risk rubric:**
+  - `low`: purely mechanical, fully reversible via git, no judgement calls, no unhandled items.
+  - `medium`: judgement calls with clear defaults, or changes to many items, or the doc is marked `breaking: true`.
+  - `high`: data could be lost or become ambiguous (dropped fields, lossy type changes), unhandled script
+    adapters/hooks, external storage adapters affected, or any verify step that cannot be fully automated.
+  The agent takes the highest level any single factor reaches.
+- **Gate:** after the dry run the agent shows the summary and risk level and asks the user to proceed. `high` requires an
+  explicit confirmation naming the risk. Applying a migration without a prior dry run for that exact step is not allowed.
+- **Staleness:** a dry run records the brain repo's HEAD commit; if HEAD differs when applying, the dry run is
+  discarded and regenerated.
 
 ## User implementations that conflict with a core change
 
@@ -96,7 +121,7 @@ listing what needs human attention rather than guessing.
 
 1. ~~Check timing~~ — resolved: the check runs at session start but only **reports** that the repo is behind; applying a migration requires an explicit command.
 2. ~~Changelog~~ — resolved: **GitHub releases** are the changelog. Each release that bumps the core version should state the new core version and link the matching `migrations/<from>-to-<to>.md`. No separate CHANGELOG file.
-3. Dry-run mode: should the agent be able to produce a diff plan before touching files? (Leaning yes.)
+3. ~~Dry run~~ — resolved: yes, see Dry run below.
 4. Item-level `schema_version` in frontmatter, or rely solely on implementation `version` plus the manifest? (Leaning no: avoids touching every file.)
 
 ## Next steps
