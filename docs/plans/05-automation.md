@@ -271,9 +271,11 @@ Reconciliation runs in a dedicated **sub-agent** started at session start, in th
   seen state, and returns a **sync report** and an ordered **event list** to the main session. It does **not** run rules, apply operations,
   call hooks, or propose or apply `claude` actions. The main session dispatches the events afterward (deterministic rules immediately, `claude` proposals into the pending queue, see Pending approvals), so approvals, loop protection and
   logging behave as in the Execution model.
-- **No rate limiting in the MVP** *(Decided)*: the sub-agent does not pace, throttle or back off. Adapters are scanned **in parallel with each other**
-  but each adapter serially, so one slow backend does not block the rest. If an adapter returns `rate_limited` or `unavailable` (doc 03), the
-  sub-agent stops that binding for this run, records it as incomplete in the sync report and resumes from its checkpoint next time (below).
+- **No rate limiting in the MVP** *(Decided)*: the sub-agent does not pace or throttle its requests, and has no backoff beyond the single retry below. Adapters are scanned **in parallel with each other**
+  but each adapter serially, so one slow backend does not block the rest. **One retry on `rate_limited`:** if an adapter returns `rate_limited`
+  (doc 03), the sub-agent waits **one minute** and retries that call once. If the retry is also `rate_limited` (two in a row), it fails that binding. The
+  wait applies only to that adapter; other adapters keep scanning, and the wait counts against the run budget. Any other error, including
+  `unavailable`, gets no retry. When a binding fails, the sub-agent stops that binding for this run, records it as incomplete in the sync report and resumes from its checkpoint next time (below).
   The run budget (below) still bounds total cost. *Post-MVP:* per-adapter self rate limiting (limits from `describe`, overridable in
   `.brain/config.yml`; a token bucket; honoring `retry_after` with backoff and jitter) can be added without changing the sync report or checkpoints.
 - **Budget and resumability:** each run has a budget (wall-clock and request count, set in `sync.budget`). Each binding keeps a checkpoint (`cursor`
