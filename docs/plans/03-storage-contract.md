@@ -201,10 +201,10 @@ The adapter's `describe` reports `archive_adapter: true` only when it meets thes
 `markdown` is the default and always qualifies. Archive is non-extensible: there is one adapter, no per-type or per-impl Archive bindings.
 
 **Archive ordering (create-then-remove, so a failure never loses data):**
-1. ~~Large lists~~ — resolved: **pagination** (always paged, cursor-based, `max_page` cap); no refs-only or projected items.
-2. ~~Local cache~~ — resolved: **deferred**, possibly adapter-specific. Before implementing, add a way to measure adapter latency (see Next steps).
+1. `read` the item from its source binding.
+2. `create` it in the Archive adapter (with `archive`/`archived_at` set).
 3. Remove it from the source binding (a permanent `delete` there is correct because the item now lives in the Archive).
-4. ~~Id mapping files~~ — resolved: a committed JSON **id index in the brain repo**, one file per implementation, `.brain/id-index/<type>/<impl-id>.json` (see Id index). Impl ids must be unique within a core type.
+4. If step 3 fails, the item exists in both places; `resolve` prefers the source binding and the plugin reports the pending cleanup. Re-running `archive` is idempotent and finishes it.
 
 `unarchive` is the mirror: create in the impl's binding, then delete from the Archive adapter. If the item's `impl` no longer exists,
 unarchive requires the user to pick a target implementation of the same type (the plugin converts the item per doc 01 triage rules).
@@ -239,10 +239,10 @@ errors above.
 
 ## Open questions
 
-1. `list` returns full envelopes; for very large external systems should there be a refs-only mode? (Leaning: add `fields_only: [..]` projection later, not now.)
-2. Should the plugin keep a local cache/index of external items for fast sort/filter, with a sync operation? (Leaning: defer until we measure cost.)
+1. ~~Large lists~~ — resolved: **pagination** (always paged, cursor-based, `max_page` cap); no refs-only or projected items.
+2. ~~Local cache~~ — resolved: **deferred**, possibly adapter-specific. Before implementing, add a way to measure adapter latency (see Next steps).
 3. ~~Delete semantics~~ (Archive is now a core type, see doc 01) — resolved and decided: **archive is the default**, permanent `delete` is the exception (explicit `confirm`). The plugin **always asks for confirmation before a permanent delete**, except the delete that completes an `archive` or a triage move. Archived items are **never purged automatically**.
-4. Where do script adapters' id mapping files live if the backend cannot store the plugin `id`, and how are they migrated (doc 02)?
+4. ~~Id mapping files~~ — resolved: a committed JSON **id index in the brain repo**, one file per implementation, `.brain/id-index/<type>/<impl-id>.json` (see Id index). Impl ids must be unique within a core type.
 5. ~~Batch reads~~ — resolved: **no `read_many`**; individual reads for now. Revisit with latency data.
 6. ~~Attachments~~ — resolved: **out of scope** for now.
 
@@ -255,5 +255,4 @@ errors above.
 ## Next steps
 
 1. Add latency measurement for adapters: the plugin records per-operation timings (op, adapter, duration, item count) to a local log, with a `describe`-level summary command, so cache and batching decisions in questions 2 and 5 can be made with data.
-2. Write `04-sort-filter.md` (natural-language rules: how Claude is invoked, inputs, outputs, reproducibility).
-3. Write `05-automation.md` (triggers, actions, hooks).
+2. Sort/filter and automation are specified in docs 04 and 05.
