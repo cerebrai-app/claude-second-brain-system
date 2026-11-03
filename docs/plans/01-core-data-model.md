@@ -15,6 +15,7 @@ The core provides contracts; implementations provide behavior.
 | Core types | `Note`, `Task`, `Project`, `Area`, `Person` (PARA-flavored) |
 | Extension mechanism | **Hybrid**: declarative definition files by default, script/hook adapters as an escape hatch |
 | Default storage | Markdown files with YAML frontmatter in the `second-brain` repo (git-versioned) |
+| Inheritance | An implementation `extends` a **core type only**; no implementation-to-implementation inheritance. Shared behavior is reused by copying or by referencing named sorts/filters/actions, not by extending. |
 
 ## Concepts
 
@@ -103,7 +104,7 @@ implements the slot's contract (stdin/stdout JSON). Declarative is the default; 
 ## Open questions
 
 1. Expression language for filters/sorts: tiny custom DSL vs. JSONLogic vs. delegating to Claude at runtime?
-2. How is inheritance resolved — can an implementation extend another implementation, or only a core type?
+2. ~~Inheritance~~ — resolved: core type only (see Decisions).
 3. Multiple implementations per core type in one vault: which one does "new task" default to? (per-area default? config?)
 4. Cross-implementation relations (a `linear-task` blocked by a `gtd-task`): is resolution via `<type>:<id>` enough?
 5. Where does the plugin's own code live vs. user definitions? Proposed: core contracts in `plugins/brain/`, user definitions in the `second-brain` repo.
