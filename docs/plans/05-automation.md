@@ -84,7 +84,7 @@ same on every adapter.
 | `add_relation` / `remove_relation` | Edit a relation on the triggering item. |
 | `create_item` | Create an item of any type, using the resolved default implementation (doc 01) unless `impl` is given. |
 | `archive` | Archive the triggering item (or a referenced one). |
-| `surface` | Produce a **report** of items matching a named filter/sort, shown to the user in the session or written to a configured output. Read-only. Evaluation is specified in doc 04; because it needs Claude, a rule using `surface` cannot run unattended unless the needed results are cached and still valid, and is otherwise queued as pending. |
+| `surface` | Produce a **report** of items matching a named filter/sort, shown to the user in the session or written to a configured output. Read-only. Evaluation is specified in doc 04; a sort used here must have pinned `keys`, and a filter with a pinned interpretation can run unattended; because it needs Claude, a rule using `surface` cannot run unattended unless the needed results are cached and still valid, and is otherwise queued as pending. |
 | `notify` | Emit a message to the user via the session (or a configured notifier hook). |
 
 Built-ins are deterministic and idempotent where possible (`set_field` to the same value is a no-op).

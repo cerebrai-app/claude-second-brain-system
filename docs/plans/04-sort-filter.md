@@ -25,6 +25,10 @@ filters:
     rule: "Open tasks that are not blocked and are either undated or due today or earlier."
     scope: { fields_eq: { status: open } }     # optional structural pre-filter (see Pipeline)
     uses_body: false                            # default; set true if the rule needs the item body
+    interpretation:                             # optional; compiled + approved once (see Pinned interpretation)
+      rule_hash: "sha256:..."                   # hash of `rule`; if the text changes this is stale
+      predicate: { and: [ { eq: [field.status, "open"] }, { not: { relation_any: [blocked_by, { eq: [field.status, "open"] }] } },
+                          { or: [ { missing: field.due }, { lte: [field.due, today] } ] } ] }
     examples:                                   # optional; used as regression tests and context
       - item: { fields: { status: open, due: 2026-11-02 }, relations: { blocked_by: [] } }
         include: true
@@ -43,16 +47,16 @@ missing values behave, state how ties break, and avoid relative terms without a 
 
 ## Pipeline
 
-1. **Resolve.** Look up the rule(s) by name in the implementation definition; compute the **scope** = the implementation's items, narrowed by `scope`.
-2. **Pre-filter (structural, deterministic).** Translate `scope` into a storage `query` (doc 03: `types`, `impls`, `fields_eq`, `relations_include`,
+1. ~~Mandatory pinned keys for automation~~ — resolved: **yes** (see Pinned keys are mandatory for automation).
+2. ~~Pinned interpretation for filters~~ — resolved: **yes**, optional per filter (see Pinned interpretation). Remaining: exact predicate grammar and whether to ship it in the first release or the one after.
    `updated_since`, `include_archived`) and page through `list`. The `scope` is **author-supplied**, never inferred by Claude from the rule text, so a
    misread rule cannot silently drop candidates. Adapters apply what they honor; the plugin applies the rest client-side. Archived items are
    excluded unless the view says otherwise.
-3. **Batch.** Split the candidates into batches of at most `max_items_per_call` (default 100). Small result sets are one call.
-4. **Evaluate (Claude, read-only).** Each batch is judged by Claude with no write tools (it cannot change anything while evaluating).
-5. **Validate.** The plugin checks Claude's output against the strict schema below. Invalid output is retried once with the validation error;
+3. ~~Batch defaults~~ — resolved: `max_items_per_call` **20**, `direct_sort_max` **10**. Revisit with measurements.
+4. ~~`follow` depth~~ — resolved: **depth 1** for the MVP.
+5. ~~Cache sharing~~ — resolved: **local only**, git-ignored.
    a second failure aborts the evaluation visibly. Partial results are never returned as if complete.
-6. **Merge and order.** The plugin merges batch results and performs the final ordering deterministically.
+6. ~~Quality measurement~~ — resolved: three runs, agreement below **80%** flags a rule (see Rule quality check). Remaining: whether 3 runs and 50 items are the right sample.
 7. **Return** refs (and a short explanation), not modified items. Callers read full items through storage as needed.
 
 ## What Claude receives
@@ -94,7 +98,7 @@ that the plugin sorts deterministically:
   `key_schema` on the first evaluation and the plugin **shows it to the user and stores it** with the rule (`keys`) once approved; later evaluations reuse it.
 - The plugin sorts with a **stable sort** over the keys (missing handled per `missing`), and breaks remaining ties by `created`, then `ref`. This makes the order
   identical for identical keys, regardless of batching.
-- For lists of ≤ `direct_sort_max` (default 20) items, Claude may return an `order` array directly if the rule is inherently holistic ("most important first"); the plugin validates it is a permutation.
+- For lists of ≤ `direct_sort_max` (default **10**) items, Claude may return an `order` array directly if the rule is inherently holistic ("most important first"); the plugin validates it is a permutation.
 
 ### Ambiguity
 
@@ -117,11 +121,52 @@ Natural-language rules can drift between runs. The mechanisms, in order of stren
 What this does **not** guarantee: two evaluations of a *changed* data set may classify an unchanged borderline item differently. Batch-local judgment is kept
 independent per item (an item's inclusion must not depend on which other items share its batch) to limit this.
 
+## Pinned interpretation (filters)
+
+A filter may be **compiled once into a structured predicate** that the plugin then evaluates in code, with no Claude involved.
+
+1. **Compile.** On request (or when a filter is first used interactively), Claude translates the rule into a predicate in a small JSON expression language
+   (below). It also reports anything in the rule it could not express.
+2. **Verify.** The predicate is run against the rule's `examples` (and, if the user wishes, a sample of real items compared with Claude's judgment). Mismatches are shown.
+3. **Review and approve.** The user sees the predicate and a plain-English read-back, and approves it. It is stored as `interpretation` in the definition,
+   with a hash of the rule text.
+4. **Use.** While the `rule_hash` matches, evaluation uses the predicate: deterministic, free, and **able to run unattended** (so `surface` and
+   automation can use pinned filters without queuing, doc 05). If the rule text changes, the interpretation is **stale**: the filter falls back to
+   Claude evaluation and the user is prompted to recompile.
+5. **Fallback.** If a rule cannot be fully expressed (needs judgment about free text), it stays natural-language only. A predicate is all-or-nothing; there are no
+   half-compiled filters.
+
+Predicate language (deliberately small, JSON-encoded): comparisons `eq ne lt lte gt gte in`, `missing`/`exists`, boolean `and or not`, value references
+`field.<name>`, `rel.<name>`, `created`, `updated`, constants and `today`/`now` (resolved from the evaluation context's timezone), and **one level** of relation
+lookup `relation_any` / `relation_all` over a named relation with a sub-predicate on the related item's fields (depth 1; matches the `follow` limit).
+Text matching is limited to `contains`/`startswith` on fields, not on the body.
+
+Pinned interpretation is **optional**; filters without it work as described in the Pipeline.
+
+## Pinned keys are mandatory for automation
+
+A sort referenced by an automation rule (`surface`, doc 05) must have `keys` pinned in the definition. A sort without pinned keys may be used interactively
+(the plugin proposes and the user approves a key schema), but loading an implementation whose automation references an unpinned sort is a validation error,
+so unattended runs never depend on a model-proposed schema.
+
+## Rule quality check
+
+A rule that Claude reads differently from run to run needs rewording. The plugin provides a check (`/brain check-rule <impl>/<name>`):
+
+- It evaluates the rule **three times** on the same candidate set with the result cache bypassed (a sample of up to 50 items by default).
+- **Agreement** = the percentage of items whose result is identical in all runs: the same include/exclude for a filter, or the same extracted key values for a sort.
+- If agreement is **below 80%**, the rule is flagged as unreliable. The report lists the items that varied, the differing reasons, and the assumptions Claude
+  recorded, so the author can reword the rule, add `examples`, or pin keys or an interpretation.
+- At 80% or above the rule passes, with the agreement percentage reported. (A rule that passes can still be reworded; the threshold is a minimum.)
+- The check also runs automatically, once, when a rule is created or its text changes, and the result is stored with the rule as `last_check`.
+- Rules with a pinned interpretation are exempt from the agreement check (they are deterministic) but are still checked against `examples`.
+
 ## Cost control
 
 - Structural `scope` and `include_archived: false` shrink the candidate set before Claude sees anything.
 - Bodies and related items are excluded unless the rule asks.
 - The result cache avoids re-evaluation; per-item caching of filter decisions keyed by `(rule hash, ref, revision, date if time_dependent)` means only new/changed items cost anything.
+- Pinned interpretations make a filter free to evaluate.
 - Large sets are evaluated in batches by a sub-agent (the same approach as the sync sub-agent in doc 05); its calls are paced and bounded by the same budget/rate-limit settings.
 - Evaluations log item counts, batches, duration and cache hits (also feeds the adapter latency measurements in doc 03).
 
