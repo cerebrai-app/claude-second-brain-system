@@ -14,6 +14,59 @@ In the `automation:` list of an implementation definition (doc 01), so it follow
 and migrations (doc 02). The `Archive` core type is not extensible and has no automation; *archive/unarchive events on items*
 are triggers for those items' own implementations.
 
+Rules that span several implementations live at the **vault level** instead (next section).
+
+## Vault-level automation
+
+Some rules belong to no single implementation: a daily review that reads `task` items and writes into a `journal` note, a weekly roll-up per
+project. These live in `.brain/automation.yml`, a versioned vault config file with its own `automation:` list, migrated with the vault (doc 02).
+
+**Restrictions** *(Decided)*:
+- Only the **`schedule`** and **`manual`** triggers. Event triggers (`create`, `update`, `capture`, `archive`, `unarchive`, `relation`,
+  `before_delete`) are per-implementation only, so event chains stay attributable to one implementation and loop protection stays simple.
+- Same action set, validation, approval (`claude` per proposal), logging, unattended queue and permission rules as implementation rules.
+- Rule ids are namespaced `vault/<id>` in logs, approvals and `/brain run vault/<id>`, so they cannot collide with `<impl>/<rule-id>`.
+
+### `requires`: declared implementations
+
+Every vault rule **must** list the implementations it depends on. A rule with no `requires` is invalid.
+
+```yaml
+automation:
+  - id: daily-journal-tasks
+    requires:
+      - { type: task, impl: task }
+      - { type: note, impl: journal, min_version: 2 }   # min_version optional (implementation version, doc 02)
+    on: { schedule: "0 8 * * *" }
+    do:
+      - action: surface
+        impl: task                       # explicit: which implementation's named filter/sort
+        filter: actionable-today
+        sort: due-then-priority
+        as: todays_tasks
+        show: false
+      - action: write_body
+        target: { find: { type: note, impl: journal, where: { title: "{{ today }}" } }, create_if_missing: true }
+        section: "## Today's tasks"
+        mode: replace_section
+        text: "{{ todays_tasks | checklist }}"
+```
+
+| Key | Meaning |
+|---|---|
+| `type` | The core type (doc 01). |
+| `impl` | The implementation id. Must be bound in the vault. |
+| `min_version` | Optional minimum implementation `version` (doc 01/02). |
+
+- **Closed world:** every implementation a vault rule touches (an `impl:` on `surface`, `find`, `create_item`, a hook's declared reads, etc.) must
+  appear in its `requires`. Load-time validation rejects a rule that references an implementation it did not declare.
+- **Availability check:** a rule whose required implementations are missing, unbound, below `min_version`, or whose adapter is unreachable is **not run**.
+  It is reported (session start and `/brain rules`) as *blocked: missing `<type>/<impl>`*. It is neither deleted nor silently skipped.
+- **Named filters and sorts** are resolved in the implementation given by `impl:`; where a rule uses exactly one required implementation of that
+  type, `impl:` may be omitted.
+- **Used by tooling:** `requires` feeds the migration dry run (doc 02), which flags rules affected when a required implementation is renamed,
+  removed, retyped, or has a referenced field or filter changed.
+
 ```yaml
 automation:
   - id: link-inbox-source            # unique within the implementation; used in logs and approvals
@@ -260,7 +313,10 @@ are re-evaluated against current state before approval, since the item may have 
 
 ## Migrations (doc 02)
 
-`automation:` blocks are part of implementation definitions, so a core-version migration may rewrite them. The dry run's report lists
+`automation:` blocks are part of implementation definitions, so a core-version migration may rewrite them. Vault-level rules
+(`.brain/automation.yml`) are migrated the same way, and the dry run uses each rule's `requires` to list every vault rule touched by a change to a
+required implementation (rename, removal, version bump, changed field or filter). A rule whose required implementation no longer exists after
+migration is reported as *blocked*, not removed. The dry run's report lists
 rules whose action names, trigger names or payloads change. Hooks are always listed under *Unhandled items* since they are user code.
 Pending approval files reference rule ids and are discarded (with a note) if their rule no longer exists after migration.
 
@@ -272,7 +328,7 @@ Pending approval files reference rule ids and are discarded (with a note) if the
 4. ~~`before_delete` safeguard~~ — resolved: **added** as a trigger (see `before_delete`), veto-only, fail closed.
 5. ~~Condition language~~ — resolved: **`match` (structural) and `when` (natural language) are sufficient.**
 6. ~~`surface` destinations~~ — resolved: results can be **bound with `as:` and used as input to later actions**, e.g. writing a task list into a daily journal note via `write_body`. (Was: where reports go beyond the session.)
-7. Cross-item and cross-implementation rules: can a rule on `task` react to a `project` change? (Leaning: no; model it as a rule on the project that edits its tasks.)
+7. ~~Cross-item and cross-implementation rules~~ — resolved: **event rules stay per-implementation** (a rule on `task` cannot react to a `project` change; model it as a rule on the project that edits its tasks). **Cross-implementation `schedule`/`manual` rules are allowed at the vault level** with a mandatory `requires` list (see Vault-level automation).
 8. ~~Session-start cost~~ — resolved for sync: a **self-rate-limiting sync sub-agent** (see Sync sub-agent). Remaining: the rule that decides which `schedule` rules are "due" when many exist, and defaults for `sync.budget`.
 
 ## Next steps

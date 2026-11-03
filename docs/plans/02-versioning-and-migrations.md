@@ -170,6 +170,13 @@ The migration doc is the first line: it should say how to adapt user definitions
 hooks, script adapters), the agent flags them in a **migration report** (`.brain/migration-report.md`, committed with the step)
 listing what needs human attention rather than guessing.
 
+## Vault-level automation (doc 05)
+
+`.brain/automation.yml` is migrated like other vault config. Each rule declares its `requires` (implementations, optional `min_version`); the dry run
+uses them to list every vault rule affected by a change to a required implementation (rename, removal, version bump, changed field or filter) in the
+migration report. Rules whose required implementation disappears are marked *blocked*, not deleted. Rules containing hooks are listed under
+*Unhandled items*.
+
 ## Implementation versioning
 
 - `version` in an implementation's frontmatter is an integer the user (or agent on their behalf) bumps when changing its schema.
