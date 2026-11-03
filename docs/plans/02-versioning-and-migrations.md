@@ -94,7 +94,7 @@ The dry run produces **code**, not just a description. Its outputs live in `.bra
 | File | Purpose |
 |---|---|
 | `report.md` | Summary (top), risk level with justification, planned changes, decisions made, unhandled items. |
-| `migrate.<ext>` | The script the apply phase runs as-is. |
+| `migrate.py` | The script the apply phase runs as-is. |
 | `plan.json` | Machine-readable list of files the script will touch and the brain repo HEAD commit it was generated against. |
 
 - **Script requirements:**
@@ -103,7 +103,8 @@ The dry run produces **code**, not just a description. Its outputs live in `.bra
   - Touches only the paths listed in `plan.json`; verifies that before and after.
   - Supports a `--check` mode that prints the changes it would make and modifies nothing, so the user can see the diff without the agent.
   - Includes the migration doc's Verify checks as assertions and fails the run if any fails.
-  - Updates `manifest.yml` and creates the single migration commit; never pushes.
+  - Updates `manifest.yml` and creates the single migration commit (which includes the dry-run folder); never pushes.
+  - Python 3 standard library only; no third-party imports. Run as `python3 -I migrate.py <repo-path>`.
 - **Report contents:**
   1. **Summary:** plain-language overview, counts (files touched, items changed, definitions changed), anything needing a user decision, and the **risk level**.
   2. **Risk level:** `low` | `medium` | `high` with a one-to-three-line justification.
@@ -137,8 +138,8 @@ listing what needs human attention rather than guessing.
 3. ~~Dry run~~ — resolved: yes, see Dry run below.
 4. Item-level `schema_version` in frontmatter, or rely solely on implementation `version` plus the manifest? (Leaning no: avoids touching every file.)
 
-5. Script language for generated migrations. Leaning Python 3 standard library only, run with `python3 -I`: ubiquitous and good at structured frontmatter edits. Alternative: POSIX shell plus `git` (fewer deps, poor for frontmatter).
-6. Keep dry-run folders in the repo as an audit trail, or `.gitignore` them? Leaning commit them with the migration.
+5. ~~Script language~~ — resolved: **Python 3, standard library only**, run with `python3 -I`. Generated script is `migrate.py`.
+6. ~~Dry-run retention~~ — resolved: dry-run folders are **kept and committed** with the migration as an audit trail.
 
 ## Next steps
 
