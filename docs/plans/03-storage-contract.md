@@ -36,7 +36,7 @@ Linear, Trello, ...) without the rest of the system caring. The contract is the 
   Backends with their own native ids store the native id privately (see `native_id`) and map it to the `id`.
 - `relations` always hold refs (`<type>:<id>`), never native ids or paths.
 - `revision` is opaque, backend-defined (git blob hash, `updated` timestamp, ETag) and used for optimistic concurrency.
-- `archive` is `null` for live items, or the ref of the Archive that holds the item (`archive:main`); `archived_at` is the timestamp. Both are set only by `archive`/`unarchive`, never by `update`. Archived items are stored by the **Archive adapter** (see below), not by their implementation's binding.
+- `archive` is `null` for live items, or the ref of the Archive that holds the item (`archive:archive`); `archived_at` is the timestamp. Both are set only by `archive`/`unarchive`, never by `update`. Archived items are stored by the **Archive adapter** (see below), not by their implementation's binding.
 - Unknown `fields` are preserved on round trip.
 
 ## Operations
@@ -51,7 +51,7 @@ Every adapter implements these. All take and return envelopes; all are scoped to
 | `archive` | `ref`, `revision` | envelope | **The default way to remove an item.** Reads the item from its implementation's binding, writes it to the **Archive adapter** (type, impl, id, fields, relations, body unchanged), then removes it from the source binding. See Archive adapter for ordering and failure handling. Idempotent. Not valid for `archive` items. |
 | `unarchive` | `ref`, `revision` | envelope | Reverse of `archive`: writes the item back to the binding of its `impl` and removes it from the Archive adapter. |
 | `delete` | `ref`, `revision`, `confirm: "permanent"` | `{ok: true}` | **Exception case:** permanent removal. Requires the explicit `confirm` literal; `unsupported` if the adapter has no hard delete. |
-| `list` | `query` (below), `limit`, `cursor` | `{items: [envelope], cursor}` | Paged. Returns envelopes, not just refs. Excludes archived items unless the query sets `include_archived` (or `archived_only`, optionally narrowed with `archive: "archive:main"`). |
+| `list` | `query` (below), `limit`, `cursor` | `{items: [envelope], cursor}` | Paged. Returns envelopes, not just refs. Excludes archived items unless the query sets `include_archived` (or `archived_only`, optionally narrowed with `archive: "archive:archive"`). |
 | `resolve` | `ref` | `{binding, found: bool}` | Cheap existence check, used for cross-adapter reference validation. |
 | `describe` | none | capabilities and settings schema | Static; used at install/setup and by the dry-run sampler. |
 
@@ -228,11 +228,11 @@ errors above.
 5. Is one process per operation too slow for large lists? A batch op (`read_many`) may be needed.
 6. Binary attachments: out of scope for v1, or `attachments` capability?
 
-7. The Archive adapter is a single vault-wide choice. Can there also be more than one Archive container (e.g. per Area or per year), or exactly one `archive:main`? (Leaning one for now.)
+7. ~~Multiple Archives~~ — resolved: exactly one Archive, id `archive` (ref `archive:archive`), no qualifiers.
 8. When an Area or Project is archived, do its contained items archive with it (cascade), stay live, or require a choice? (Leaning ask, default cascade.)
 
-9. Migrations (doc 02): archived items belong to the Archive adapter, so a migration script must also run its transforms over archived items, including when the Archive adapter is external.
-10. Changing the Archive adapter after install: needs a defined move procedure (a migration-style script). Out of scope for v1?
+9. ~~Migrations over archived items~~ — resolved: yes, migration scripts also transform archived items (via the Archive adapter, including external ones, tested per doc 02).
+10. ~~Changing the Archive adapter~~ — resolved: **out of scope for the MVP**; the adapter is fixed at install.
 
 ## Next steps
 

@@ -81,6 +81,7 @@ There is **no per-object version marker**: not every storage backend can persist
 - **Crash or kill:** the marker and uncommitted changes remain. The session-start check reports a partial migration. The user
   either re-runs the same `migrate.py` (resume) or discards everything with git (`git restore`/`git clean` on the paths in
   `plan.json`) and removes the marker.
+- **Archived items** are part of every migration: the script also transforms objects held by the Archive adapter (doc 03).
 - **Non-file storage** (external adapters): the script can only act on them through their adapter's script protocol (doc 03).
   Writes there are not covered by git rollback, so such steps must be idempotent too. They are tested against a sample
   snapshot (see Required test run), and the risk level is at least `medium` (`high` if the step is not safely re-runnable).

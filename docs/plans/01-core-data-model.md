@@ -58,7 +58,7 @@ Core fields are deliberately minimal; implementations add the rest. **`Archive` 
 - **Not extensible:** no implementations, no custom schema, storage, sort, filter or automation slots, and no `defaults`.
   Its behavior is fixed by the plugin (browsing, restoring, listing), so every vault's Archive works the same way.
 - An Archive cannot contain an Archive, and cannot itself be archived or deleted.
-- The vault has one system Archive, `archive:main`, created at install (like the Inbox area). Whether more than one is allowed is open.
+- The vault has exactly one system Archive, with id `archive` (ref `archive:archive`), created at install (like the Inbox area). No other Archives, no qualifiers.
 - An archived item still follows its own implementation's **schema**, but is stored by the Archive's **single storage adapter**
   (one adapter for the whole vault, chosen at install, which must support all object types; see doc 03), not by its implementation's binding.
   Restoring writes it back to its implementation's binding (to its previous Area/Project when those still exist).
@@ -180,7 +180,7 @@ defaults:
 The plugin's setup flow runs at install and:
 
 1. Creates `second-brain/.brain/config.yml` (`version`, and the location of implementation definitions).
-2. Creates the system Archive (`archive:main`) and the Inbox area item with `defaults` chosen by the user (or built-in starters).
+2. Creates the system Archive (`archive:archive`) and the Inbox area item with `defaults` chosen by the user (or built-in starters).
 3. Scaffolds starter implementation definitions for any chosen implementation that does not exist yet.
 
 **Triage** later moves an item out of the Inbox by assigning it an Area and/or Project and, if the resolved default
