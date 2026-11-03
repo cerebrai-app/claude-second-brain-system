@@ -167,7 +167,7 @@ A rule that Claude reads differently from run to run needs rewording. The plugin
 - Bodies and related items are excluded unless the rule asks.
 - The result cache avoids re-evaluation; per-item caching of filter decisions keyed by `(rule hash, ref, revision, date if time_dependent)` means only new/changed items cost anything.
 - Pinned interpretations make a filter free to evaluate.
-- Large sets are evaluated in batches by a sub-agent (the same approach as the sync sub-agent in doc 05); its calls are bounded by the same budget settings (self rate limiting is post-MVP, doc 05).
+- Large sets are evaluated in batches by a sub-agent (the same approach as the sync sub-agent in doc 05); self rate limiting and run budgets are post-MVP (doc 05).
 - Evaluations log item counts, batches, duration and cache hits (also feeds the adapter latency measurements in doc 03).
 
 ## Who calls it

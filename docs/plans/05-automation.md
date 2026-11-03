@@ -274,13 +274,14 @@ Reconciliation runs in a dedicated **sub-agent** started at session start, in th
 - **No rate limiting in the MVP** *(Decided)*: the sub-agent does not pace or throttle its requests, and has no backoff beyond the single retry below. Adapters are scanned **in parallel with each other**
   but each adapter serially, so one slow backend does not block the rest. **One retry on `rate_limited`:** if an adapter returns `rate_limited`
   (doc 03), the sub-agent waits **one minute** and retries that call once. If the retry is also `rate_limited` (two in a row), it fails that binding. The
-  wait applies only to that adapter; other adapters keep scanning, and the wait counts against the run budget. Any other error, including
+  wait applies only to that adapter; other adapters keep scanning. Any other error, including
   `unavailable`, gets no retry. When a binding fails, the sub-agent stops that binding for this run, records it as incomplete in the sync report and resumes from its checkpoint next time (below).
-  The run budget (below) still bounds total cost. *Post-MVP:* per-adapter self rate limiting (limits from `describe`, overridable in
+  *Post-MVP:* per-adapter self rate limiting (limits from `describe`, overridable in
   `.brain/config.yml`; a token bucket; honoring `retry_after` with backoff and jitter) can be added without changing the sync report or checkpoints.
-- **Budget and resumability:** each run has a budget (wall-clock and request count, set in `sync.budget`). Each binding keeps a checkpoint (`cursor`
-  and the high-water `updated_since` mark) in the seen state, so a run that hits its budget or is interrupted resumes from the checkpoint next
-  time instead of rescanning. Bindings are visited **least recently synced first** so none starve.
+- **No runtime budget in the MVP** *(Decided)*: a sync run has no wall-clock or request-count limit and runs until every binding is scanned or fails.
+  *Post-MVP:* a per-run budget (`sync.budget`) can be added.
+- **Resumability:** each binding keeps a checkpoint (`cursor` and the high-water `updated_since` mark) in the seen state, so a run that is
+  interrupted or fails a binding (for example after two `rate_limited` in a row) resumes from the checkpoint next time instead of rescanning.
 - **Reporting:** the sub-agent streams progress ("synced 4 of 6 bindings; linear-task incomplete: rate_limited") and ends with the report. The
   main session may start dispatching events for completed bindings before the whole sync finishes.
 - **Consistency:** the seen state is only advanced for items whose events have been **handed to** the main session; if the session ends before
@@ -347,7 +348,7 @@ Pending approval files reference rule ids and are discarded (with a note) if the
 5. ~~Condition language~~ — resolved: **`match` (structural) and `when` (natural language) are sufficient.**
 6. ~~`surface` destinations~~ — resolved: results can be **bound with `as:` and used as input to later actions**, e.g. writing a task list into a daily journal note via `write_body`. (Was: where reports go beyond the session.)
 7. ~~Cross-item and cross-implementation rules~~ — resolved: **event rules stay per-implementation** (a rule on `task` cannot react to a `project` change; model it as a rule on the project that edits its tasks). **Cross-implementation `schedule`/`manual` rules are allowed at the vault level** with a mandatory `requires` list (see Vault-level automation).
-8. ~~Session-start cost~~ — resolved for sync: a **background sync sub-agent** with a run budget and resumable checkpoints (see Sync sub-agent); **self rate limiting is post-MVP**. Remaining: defaults for `sync.budget`. The "which `schedule` rules are due" question moves with scheduling to post-MVP.
+8. ~~Session-start cost~~ — resolved for sync: a **background sync sub-agent** with resumable checkpoints (see Sync sub-agent); **self rate limiting and a run budget are post-MVP**. Resolved, nothing remaining for sync. The "which `schedule` rules are due" question moves with scheduling to post-MVP.
 
 ## Next steps
 
