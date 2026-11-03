@@ -47,16 +47,16 @@ missing values behave, state how ties break, and avoid relative terms without a 
 
 ## Pipeline
 
-1. ~~Mandatory pinned keys for automation~~ — resolved: **yes** (see Pinned keys are mandatory for automation).
-2. ~~Pinned interpretation for filters~~ — resolved: **yes**, optional per filter (see Pinned interpretation). Remaining: exact predicate grammar and whether to ship it in the first release or the one after.
+1. **Resolve.** Look up the rule(s) by name in the implementation definition; compute the **scope** = the implementation's items, narrowed by `scope`.
+2. **Pre-filter (structural, deterministic).** Translate `scope` into a storage `query` (doc 03: `types`, `impls`, `fields_eq`, `relations_include`,
    `updated_since`, `include_archived`) and page through `list`. The `scope` is **author-supplied**, never inferred by Claude from the rule text, so a
    misread rule cannot silently drop candidates. Adapters apply what they honor; the plugin applies the rest client-side. Archived items are
    excluded unless the view says otherwise.
-3. ~~Batch defaults~~ — resolved: `max_items_per_call` **20**, `direct_sort_max` **10**. Revisit with measurements.
-4. ~~`follow` depth~~ — resolved: **depth 1** for the MVP.
-5. ~~Cache sharing~~ — resolved: **local only**, git-ignored.
+3. **Batch.** Split the candidates into batches of at most `max_items_per_call` (default **20**). Small result sets are one call.
+4. **Evaluate (Claude, read-only).** Each batch is judged by Claude with no write tools (it cannot change anything while evaluating).
+5. **Validate.** The plugin checks Claude's output against the strict schema below. Invalid output is retried once with the validation error;
    a second failure aborts the evaluation visibly. Partial results are never returned as if complete.
-6. ~~Quality measurement~~ — resolved: three runs, agreement below **80%** flags a rule (see Rule quality check). Remaining: whether 3 runs and 50 items are the right sample.
+6. **Merge and order.** The plugin merges batch results and performs the final ordering deterministically.
 7. **Return** refs (and a short explanation), not modified items. Callers read full items through storage as needed.
 
 ## What Claude receives
@@ -190,15 +190,14 @@ A rule that Claude reads differently from run to run needs rewording. The plugin
 
 ## Open questions
 
-1. Should the pinned `keys` for a sort be mandatory for any sort used by automation (so scheduled results do not depend on key proposals)? (Leaning: yes.)
-2. Optional **pinned interpretation** for filters too: a structured predicate Claude compiles from the rule once, user reviews, and the plugin evaluates deterministically thereafter (the formal fallback mentioned in doc 01)? (Leaning: later phase; the examples and cache cover the MVP.)
-3. Default values for `max_items_per_call` (100) and `direct_sort_max` (20): confirm after measuring cost and quality.
-4. Do `follow` relations need depth > 1 (e.g. "blocked by a task whose own blocker is open")? (Leaning: depth 1 only.)
-5. Should result-cache entries ever be shared across machines (committed), or always local? (Leaning: local, git-ignored.)
-6. Quality evaluation: how do we measure disagreement between runs, and what threshold means a rule needs rewording?
+1. ~~Mandatory pinned keys for automation~~ — resolved: **yes** (see Pinned keys are mandatory for automation).
+2. ~~Pinned interpretation for filters~~ — resolved: **yes**, optional per filter (see Pinned interpretation). Remaining: exact predicate grammar and whether to ship it in the first release or the one after.
+3. ~~Batch defaults~~ — resolved: `max_items_per_call` **20**, `direct_sort_max` **10**. Revisit with measurements.
+4. ~~`follow` depth~~ — resolved: **depth 1** for the MVP.
+5. ~~Cache sharing~~ — resolved: **local only**, git-ignored.
+6. ~~Quality measurement~~ — resolved: three runs, agreement below **80%** flags a rule (see Rule quality check). Remaining: whether 3 runs and 50 items are the right sample.
 
 ## Next steps
 
-1. Resolve the open questions.
-2. Specify the install flow and triage mechanics.
-3. Detail per-type core fields and relations (doc 01 strawman table).
+1. Specify the install flow and triage mechanics.
+2. Detail per-type core fields and relations (doc 01 strawman table).
