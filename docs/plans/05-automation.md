@@ -24,7 +24,7 @@ project. These live in `.brain/automation.yml`, a versioned vault config file wi
 **Restrictions** *(Decided)*:
 - Only the **`manual`** trigger in the MVP (**`schedule`** is post-MVP, see Scheduling). Event triggers (`create`, `update`, `capture`, `archive`, `unarchive`, `relation`,
   `before_delete`) are per-implementation only, so event chains stay attributable to one implementation and loop protection stays simple.
-- Same action set, validation, approval (`claude` per proposal), logging, unattended queue and permission rules as implementation rules.
+- Same action set, validation, approval (`claude` per proposal), logging, pending-approval queue and permission rules as implementation rules.
 - Rule ids are namespaced `vault/<id>` in logs, approvals and `/brain run vault/<id>`, so they cannot collide with `<impl>/<rule-id>`.
 
 ### `requires`: declared implementations
@@ -106,8 +106,9 @@ automation:
 | `do` | Ordered list of actions. Stops at the first failing action unless it has `on_error: continue`. |
 | `enabled` | Defaults to true. A rule can be disabled without being removed. |
 
-Because `when` involves Claude, a rule with `when` **cannot run unattended** (no Claude available) and is queued as pending
-(see Unattended runs). *(Decided.)* Rules with only `match` are fully deterministic.
+Because `when` involves Claude, it is judged only in an interactive session; in the MVP that is always the case, so `when` is evaluated
+immediately even for sync-detected events. (Post-MVP non-interactive runs cannot judge it and queue the rule as pending.) Rules with only
+`match` are fully deterministic.
 
 ## Triggers
 
@@ -253,8 +254,9 @@ Items are also edited by hand (markdown files) or in a backend's own UI. The plu
   - relation added/removed → also emit `relation` events.
   - ref in seen state but not found by `read`/`resolve` anywhere (including the Archive) → **not** an event; recorded as a *missing item* in the
     sync report (permanent delete is not a trigger, and validation reports dangling references per doc 03).
-- **Event marking:** reconciled events carry `origin: external` and `detected_at`; they have `depth: 0`, so rules triggered by them run
-  normally. The body of the payload says `before` is a snapshot (fields/relations only).
+- **Event marking:** reconciled events carry `origin: external:<impl-id>` (the id of the implementation whose binding the change was detected on,
+  e.g. `external:task`) and `detected_at`; they have `depth: 0`, so rules triggered by them run normally. The `external:` prefix is what marks an
+  event as sync-detected (see Pending approvals). The body of the payload says `before` is a snapshot (fields/relations only).
 - **Validation:** an externally created or changed item is validated against its implementation schema first. If invalid, no rules run on it; it is
   reported to the user as invalid.
 - **First run:** with no seen state, the plugin builds the baseline silently (no `create` storm). Only changes after the baseline emit events.
@@ -267,7 +269,7 @@ Reconciliation runs in a dedicated **sub-agent** started at session start, in th
 
 - **Role (detect only):** it reads through the storage contract (`list`, `read`, `resolve`), compares against the seen state, updates the
   seen state, and returns a **sync report** and an ordered **event list** to the main session. It does **not** run rules, apply operations,
-  call hooks, or propose or apply `claude` actions. The main session dispatches the events afterward, so approvals, loop protection and
+  call hooks, or propose or apply `claude` actions. The main session dispatches the events afterward (deterministic rules immediately, `claude` proposals into the pending queue, see Pending approvals), so approvals, loop protection and
   logging behave as in the Execution model.
 - **Self rate limiting:** the sub-agent paces its own requests per adapter.
   - Limits come from the adapter's `describe` (`rate_limit`: requests per second/minute, `max_concurrency`, `max_page`), overridable in
@@ -297,18 +299,26 @@ Claude Code plugins have no always-on process, so schedules cannot fire on their
   (stored in `.brain/automation/state.json`, git-ignored) and runs the ones that are due, at most once per missed window (missed runs
   are not replayed).
 - **External trigger:** the user may run the plugin non-interactively from cron, a CI job or a scheduled Claude Code task
-  (`claude -p "/brain run-due"`). Deterministic rules run; rules that need Claude or approval are queued.
+  (`claude -p "/brain run-due"`). Deterministic rules run; rules that need Claude or approval are queued (see Pending approvals).
 
-## Unattended runs and pending approvals (post-MVP)
+## Pending approvals (deferred review)
 
-In the MVP every rule runs inside an interactive session (events from edits or reconciliation, and `manual` runs), so approvals happen in place and
-there is no pending queue. This section applies once non-interactive runs exist (scheduled or external triggers, above). The pending-file layout is
-reserved.
+The pending queue is **in the MVP**, as **deferred approvals** rather than unattended runs. Sync can detect many external changes at once (after days
+away, or a bulk edit in a backend); prompting for every `claude` proposal in the middle of a session would be disruptive, so those wait for the user.
 
-Rules that need a person (`claude` actions, or `when` conditions) cannot complete when nobody is present. They are written to a queue:
-`.brain/automation/pending/<timestamp>-<rule-id>.json`, containing the event and, if already computed, the proposal. The next interactive
-session reports the pending count and lets the user review each. Pending entries expire after a configurable period (default 14 days) and
-are re-evaluated against current state before approval, since the item may have changed.
+- **What is deferred:** `claude` actions triggered by events whose `origin` starts with `external:` (sync-detected). Deterministic rules on the same
+  events (`match` only, built-ins, hooks) and `when` conditions run **immediately** in the session. `surface` and `manual` runs are not deferred.
+- **Not deferred:** events from the user's own in-session actions (origin is the rule id chain, or none): the proposal is shown right away.
+  `before_delete` rules are never queued (see above).
+- **Queue:** `.brain/automation/pending/<timestamp>-<impl-id>-<rule-id>.json` (git-ignored), containing the event (with its `external:<impl-id>`
+  origin) and the proposal if already computed. The impl id comes from the event's origin; `<rule-id>` is the rule's id within that implementation.
+- **Review:** at session start the plugin reports "N pending approvals". `/brain pending` lists them (grouped by impl id) and lets the user approve,
+  edit or reject each, or reject in bulk. Approval follows the normal flow (doc 05, `claude`): the exact operations are shown as diffs and applied
+  deterministically.
+- **Expiry and staleness:** entries expire after a configurable period (default 14 days). Each is re-evaluated against the current state before
+  approval, since the item may have changed; a proposal that no longer applies is regenerated or dropped with a note.
+
+Post-MVP non-interactive runs (scheduled or external triggers, above) reuse the same queue for rules that need Claude or approval.
 
 ## Permissions and safety
 
