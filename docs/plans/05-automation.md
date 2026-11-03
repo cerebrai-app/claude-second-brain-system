@@ -357,4 +357,4 @@ Pending approval files reference rule ids and are discarded (with a note) if the
    - Doc 01: mention the vault-level `.brain/automation.yml` as a vault config file, and the `write_body` / `before_delete` additions where automation is summarized.
    - Doc 03: note that the plugin's permanent-delete flow runs the `before_delete` rules after the user confirmation and before the adapter `delete` call.
 3. Decide whether doc 05 moves from **Draft** to reviewed now that its open questions are resolved.
-4. Post-MVP, deliberately deferred here: `schedule` triggers and catch-up, non-interactive runs (cron, `run-due`) feeding the pending queue, sync self rate limiting, a sync run budget, and vault-level event triggers.
+4. Post-MVP, deliberately deferred here: `schedule` triggers and catch-up, non-interactive runs (cron, `run-due`) feeding the pending queue, sync self rate limiting, and a sync run budget.
