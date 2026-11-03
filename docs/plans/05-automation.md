@@ -354,4 +354,4 @@ Pending approval files reference rule ids and are discarded (with a note) if the
 
 1. Write the install flow and triage mechanics doc (not yet written). Pending approvals, the `capture` trigger and Inbox triage depend on it.
 2. Decide whether doc 05 moves from **Draft** to reviewed now that its open questions are resolved.
-3. Post-MVP, deliberately deferred here: `schedule` triggers and catch-up, non-interactive runs (cron, `run-due`) feeding the pending queue, sync self rate limiting, and a sync run budget.
+3. Post-MVP, deliberately deferred here (the full cross-doc list is in [Deferred and Out-of-Scope Items](deferred.md)): `schedule` triggers and catch-up, non-interactive runs (cron, `run-due`) feeding the pending queue, sync self rate limiting, and a sync run budget.
