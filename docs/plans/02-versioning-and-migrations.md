@@ -93,6 +93,18 @@ schema_version: 2
 - New objects are created at the current core version by the plugin.
 - Objects with no `schema_version` are treated as invalid and flagged (migration 0-to-1 is the only place to add it).
 
+### Storage without `schema_version` support
+
+Not every storage adapter can persist a `schema_version` on each object (e.g. an external tracker with fixed fields).
+Each storage adapter therefore declares a capability, `supports_schema_version: true | false` (see the storage contract, doc 03).
+
+- **Supported:** the behavior above applies unchanged.
+- **Not supported:** the adapter's objects are tracked in a **ledger in the brain repo**,
+  `.brain/migration-state/<adapter>.yml`, mapping object ref (`<type>:<id>`) to migrated-to version. The script updates the
+  ledger as it migrates each object, giving the same resume behavior. If the adapter also cannot be written by the
+  script, its objects are listed under **Unhandled items** in the dry-run report and the risk level is `high`.
+- Implementation versions are never stored per item for any adapter.
+
 ## Migration flow
 
 The agent is involved only in **planning**. The **apply** phase is a generated script run as-is; no agent reasoning,
@@ -164,7 +176,7 @@ listing what needs human attention rather than guessing.
 1. ~~Check timing~~ — resolved: the check runs at session start but only **reports** that the repo is behind; applying a migration requires an explicit command.
 2. ~~Changelog~~ — resolved: **GitHub releases** are the changelog. Each release that bumps the core version should state the new core version and link the matching `migrations/<from>-to-<to>.md`. No separate CHANGELOG file.
 3. ~~Dry run~~ — resolved: yes, see Dry run below.
-4. ~~Item-level `schema_version`~~ — resolved: **yes**, every object carries `schema_version` so a partial migration can be detected and resumed (see Per-object schema version). Remaining: whether items should also record their implementation `version`.
+4. ~~Item-level `schema_version`~~ — resolved: **yes**, every object carries `schema_version` so a partial migration can be detected and resumed (see Per-object schema version). Items do **not** record their implementation `version` (not every storage can hold extra fields); implementation schema changes find affected items by inspecting their fields. Because storage backends may not be able to hold `schema_version` either, see Storage without `schema_version` support.
 
 5. ~~Script language~~ — resolved: **Python 3, standard library only**, run with `python3 -I`. Generated script is `migrate.py`.
 6. ~~Dry-run retention~~ — resolved: dry-run folders are **kept and committed** with the migration as an audit trail.
