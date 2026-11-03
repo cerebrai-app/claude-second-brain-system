@@ -132,7 +132,7 @@ There is no "always allow" mode in the MVP. Approval is per proposal. (Open ques
 
 Items are also edited by hand (markdown files) or in a backend's own UI. The plugin detects these and emits the same events.
 
-- **When:** at session start (before schedule catch-up), and on demand (`/brain sync`). Not continuous; there is no background process.
+- **When:** at session start and on demand (`/brain sync`), run by a **sync sub-agent** (next subsection) so it does not block the session. Not continuous; there is no daemon.
 - **Seen state:** `.brain/automation/seen/<type>/<impl-id>.json` (git-ignored, rebuildable) holds, per `ref`, the last-seen `revision`
   and a compact snapshot of `fields` and `relations` (no body). Entries are updated after the plugin's own writes too, so its
   own changes are not seen as external.
@@ -148,8 +148,32 @@ Items are also edited by hand (markdown files) or in a backend's own UI. The plu
 - **Validation:** an externally created or changed item is validated against its implementation schema first. If invalid, no rules run on it; it is
   reported to the user as invalid.
 - **First run:** with no seen state, the plugin builds the baseline silently (no `create` storm). Only changes after the baseline emit events.
-- **External backends** are bound by adapter rate limits and latency; a full scan is bounded by pagination (doc 03) and the cost is logged.
+- **External backends** are bound by adapter rate limits and latency; the sync sub-agent throttles itself (below) and the cost is logged.
 - Automation does not run for an item whose adapter could not be reached; the failure is reported and the sync resumes next time.
+
+### Sync sub-agent
+
+Reconciliation runs in a dedicated **sub-agent** started at session start, in the background, so the main session is usable immediately.
+
+- **Role (detect only):** it reads through the storage contract (`list`, `read`, `resolve`), compares against the seen state, updates the
+  seen state, and returns a **sync report** and an ordered **event list** to the main session. It does **not** run rules, apply operations,
+  call hooks, or propose or apply `claude` actions. The main session dispatches the events afterward, so approvals, loop protection and
+  logging behave as in the Execution model.
+- **Self rate limiting:** the sub-agent paces its own requests per adapter.
+  - Limits come from the adapter's `describe` (`rate_limit`: requests per second/minute, `max_concurrency`, `max_page`), overridable in
+    `.brain/config.yml` under `sync.rate_limits.<type>/<impl-id>`. Defaults are conservative (e.g. 2 requests/second, concurrency 1) for
+    `script` adapters; the local `markdown` adapter is not rate limited (it only reads local files).
+  - Implemented as a token bucket per adapter. On `rate_limited` or `unavailable` errors it honors any `retry_after` and otherwise backs off
+    exponentially with jitter, up to a bounded number of retries, then gives up on that binding for this run and records it as incomplete.
+  - Adapters are scanned **in parallel with each other** but each adapter serially, so one slow backend does not block the rest.
+- **Budget and resumability:** each run has a budget (wall-clock and request count, set in `sync.budget`). Each binding keeps a checkpoint (`cursor`
+  and the high-water `updated_since` mark) in the seen state, so a run that hits its budget or is interrupted resumes from the checkpoint next
+  time instead of rescanning. Bindings are visited **least recently synced first** so none starve.
+- **Reporting:** the sub-agent streams progress ("synced 4 of 6 bindings; linear-task incomplete: rate limited") and ends with the report. The
+  main session may start dispatching events for completed bindings before the whole sync finishes.
+- **Consistency:** the seen state is only advanced for items whose events have been **handed to** the main session; if the session ends before
+  dispatch, those items are re-detected next time (events are keyed by `(ref, revision)` so they dispatch once).
+- Logged timings (per binding: duration, requests, retries, pages) feed the latency measurement in doc 03.
 
 ## Scheduling
 
@@ -192,7 +216,7 @@ Pending approval files reference rule ids and are discarded (with a note) if the
 5. A condition language beyond `match` (structural) and `when` (natural language) if `when` proves too unpredictable.
 6. Where `surface` reports go beyond the session (a file in the vault, a notifier hook).
 7. Cross-item and cross-implementation rules: can a rule on `task` react to a `project` change? (Leaning: no; model it as a rule on the project that edits its tasks.)
-8. Session-start catch-up cost and the rule that decides which rules are "due" when many exist.
+8. ~~Session-start cost~~ — resolved for sync: a **self-rate-limiting sync sub-agent** (see Sync sub-agent). Remaining: the rule that decides which `schedule` rules are "due" when many exist, and defaults for `sync.budget`.
 
 ## Next steps
 
