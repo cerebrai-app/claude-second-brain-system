@@ -76,7 +76,7 @@ All keys optional, all combined with AND. Adapters apply as much as they can nat
   "adapter": "markdown",
   "capabilities": {
     "query": ["types", "impls", "fields_eq", "relations_include", "updated_since", "include_archived"],
-    "archive_adapter": false,
+    "archive_adapter": true,
     "hard_delete": true,
     "native_ids": false,
     "transactions": false,
