@@ -94,7 +94,7 @@ listing what needs human attention rather than guessing.
 
 ## Open questions
 
-1. Should the migration check run automatically at every session start, or only on an explicit command / plugin update?
+1. ~~Check timing~~ — resolved: the check runs at session start but only **reports** that the repo is behind; applying a migration requires an explicit command.
 2. ~~Changelog~~ — resolved: **GitHub releases** are the changelog. Each release that bumps the core version should state the new core version and link the matching `migrations/<from>-to-<to>.md`. No separate CHANGELOG file.
 3. Dry-run mode: should the agent be able to produce a diff plan before touching files? (Leaning yes.)
 4. Item-level `schema_version` in frontmatter, or rely solely on implementation `version` plus the manifest? (Leaning no: avoids touching every file.)
