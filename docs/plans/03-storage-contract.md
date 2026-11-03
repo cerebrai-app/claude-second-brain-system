@@ -51,7 +51,7 @@ Every adapter implements these. All take and return envelopes; all are scoped to
 | `archive` | `ref`, `revision` | envelope | **The default way to remove an item.** Reads the item from its implementation's binding, writes it to the **Archive adapter** (type, impl, id, fields, relations, body unchanged), then removes it from the source binding. See Archive adapter for ordering and failure handling. Idempotent. Not valid for `archive` items. |
 | `unarchive` | `ref`, `revision` | envelope | Reverse of `archive`: writes the item back to the binding of its `impl` and removes it from the Archive adapter. |
 | `delete` | `ref`, `revision`, `confirm: "permanent"` | `{ok: true}` | **Exception case:** permanent removal. Requires the explicit `confirm` literal; `unsupported` if the adapter has no hard delete. |
-| `list` | `query` (below), `limit`, `cursor` | `{items: [envelope], cursor}` | Paged. Returns envelopes, not just refs. Excludes archived items unless the query sets `include_archived` (or `archived_only`, optionally narrowed with `archive: "archive:archive"`). |
+| `list` | `query` (below), `limit`, `cursor` | `{items: [envelope], cursor}` | Always paged: callers pass `limit` and follow `cursor`; adapters cap at `max_page`. Full envelopes only (no reduced or projected items). Returns envelopes, not just refs. Excludes archived items unless the query sets `include_archived` (or `archived_only`, optionally narrowed with `archive: "archive:archive"`). |
 | `resolve` | `ref` | `{binding, found: bool}` | Cheap existence check, used for cross-adapter reference validation. |
 | `describe` | none | capabilities and settings schema | Static; used at install/setup and by the dry-run sampler. |
 
@@ -142,7 +142,7 @@ Error (exit code non-zero **or** `ok: false`):
   store, and `describe` lists the variable names it needs (`requires_env`) so setup can check they exist.
 - **As Archive adapter:** a script adapter may be the Archive adapter only if its `describe` reports the Archive requirements below. It does not need a native "archive" concept; archived items are ordinary records it stores with `archive`/`archived_at` set. Backends with fixed schemas typically cannot meet the requirements and should not be chosen for the Archive.
 - **Id mapping:** since the plugin assigns `id`, a script for a backend with native ids must store the plugin `id` in the
-  backend (a custom field, label, or description marker) or in a mapping file under `.brain/adapters/<name>.map.json`, and
+  backend (a custom field, label, or description marker) or, if the backend cannot hold it, in the **id index** (below), and
   return `ref` consistently. `describe` reports `native_ids: true` and how it maps.
 - **Timeouts and output limits** are enforced by the plugin; stderr is surfaced to the user on failure.
 - **Trust:** scripts execute on the user's machine with their privileges. They live in the user's brain repo and are the
@@ -150,6 +150,21 @@ Error (exit code non-zero **or** `ok: false`):
   without that confirmation.
 - **Testing:** `list` and `read` are used by the migration sampler (doc 02), and an adapter must also be usable through a
   **fixture adapter** that serves a `sample.json` of envelopes, so a script's logic can be tested without the real system.
+
+## Id index (OS cache)
+
+For backends that cannot store the plugin `id`, the plugin keeps a JSON **id index** mapping `ref` to native id.
+
+- **Location:** the user's OS cache directory, in a folder named for the vault: `<os-cache>/second-brain/<vault-name>/id-index/<adapter>.json`
+  (`$XDG_CACHE_HOME` or `~/.cache` on Linux, `~/Library/Caches` on macOS, `%LOCALAPPDATA%` on Windows).
+  `<vault-name>` is the `name` in `.brain/config.yml`, set at install.
+- It is **per user and per machine**, not in the brain repo, and not committed.
+- **Risk:** this index is the only place the mapping lives for such backends, so deleting the cache loses it. The plugin
+  must be able to **rebuild** it by `list`-ing the adapter and matching on a stable key the script defines (`describe` reports
+  `rebuild: "by_native_key"`, e.g. a title+created pair or a marker the script can search for), or else the adapter reports
+  `rebuild: "none"` and setup warns that the mapping is not recoverable. Adapters that can store the id in the backend avoid this.
+- **Migrations (doc 02):** the index is outside git, so it is not rolled back by `git restore`. The migration test run rebuilds
+  it in a scratch location, and a real run updates it only after the backend writes succeed.
 
 ## Fixture adapter (test-only)
 
@@ -183,10 +198,10 @@ The adapter's `describe` reports `archive_adapter: true` only when it meets thes
 `markdown` is the default and always qualifies. Archive is non-extensible: there is one adapter, no per-type or per-impl Archive bindings.
 
 **Archive ordering (create-then-remove, so a failure never loses data):**
-1. `read` the item from its source binding.
-2. `create` it in the Archive adapter (with `archive`/`archived_at` set).
+1. ~~Large lists~~ — resolved: **pagination** (always paged, cursor-based, `max_page` cap); no refs-only or projected items.
+2. ~~Local cache~~ — resolved: **deferred**, possibly adapter-specific. Before implementing, add a way to measure adapter latency (see Next steps).
 3. Remove it from the source binding (a permanent `delete` there is correct because the item now lives in the Archive).
-4. If step 3 fails, the item exists in both places; `resolve` prefers the source binding and the plugin reports the pending cleanup. Re-running `archive` is idempotent and finishes it.
+4. ~~Id mapping files~~ — resolved: a JSON **id index in the OS cache directory**, in a folder named for the vault (see Id index). Remaining: rebuild strategy per adapter.
 
 `unarchive` is the mirror: create in the impl's binding, then delete from the Archive adapter. If the item's `impl` no longer exists,
 unarchive requires the user to pick a target implementation of the same type (the plugin converts the item per doc 01 triage rules).
@@ -223,19 +238,19 @@ errors above.
 
 1. `list` returns full envelopes; for very large external systems should there be a refs-only mode? (Leaning: add `fields_only: [..]` projection later, not now.)
 2. Should the plugin keep a local cache/index of external items for fast sort/filter, with a sync operation? (Leaning: defer until we measure cost.)
-3. ~~Delete semantics~~ (Archive is now a core type, see doc 01) — resolved: **archive is the default**, permanent `delete` is the exception (explicit `confirm`). Remaining: should the plugin itself require user confirmation before any permanent delete (leaning yes, except triage moves), and should archived items ever be purged automatically (leaning no)?
+3. ~~Delete semantics~~ (Archive is now a core type, see doc 01) — resolved and decided: **archive is the default**, permanent `delete` is the exception (explicit `confirm`). The plugin **always asks for confirmation before a permanent delete**, except the delete that completes an `archive` or a triage move. Archived items are **never purged automatically**.
 4. Where do script adapters' id mapping files live if the backend cannot store the plugin `id`, and how are they migrated (doc 02)?
-5. Is one process per operation too slow for large lists? A batch op (`read_many`) may be needed.
-6. Binary attachments: out of scope for v1, or `attachments` capability?
+5. ~~Batch reads~~ — resolved: **no `read_many`**; individual reads for now. Revisit with latency data.
+6. ~~Attachments~~ — resolved: **out of scope** for now.
 
 7. ~~Multiple Archives~~ — resolved: exactly one Archive, id `archive` (ref `archive:archive`), no qualifiers.
-8. When an Area or Project is archived, do its contained items archive with it (cascade), stay live, or require a choice? (Leaning ask, default cascade.)
+8. ~~Cascade on archive~~ — resolved: when an Area or Project is archived the plugin **asks** whether to also archive its contained items, and **recommends yes** (cascade) as the default choice. Contained items are archived with the standard `archive` operation, one at a time.
 
 9. ~~Migrations over archived items~~ — resolved: yes, migration scripts also transform archived items (via the Archive adapter, including external ones, tested per doc 02).
 10. ~~Changing the Archive adapter~~ — resolved: **out of scope for the MVP**; the adapter is fixed at install.
 
 ## Next steps
 
-1. Resolve open questions above.
+1. Add latency measurement for adapters: the plugin records per-operation timings (op, adapter, duration, item count) to a local log, with a `describe`-level summary command, so cache and batching decisions in questions 2 and 5 can be made with data.
 2. Write `04-sort-filter.md` (natural-language rules: how Claude is invoked, inputs, outputs, reproducibility).
 3. Write `05-automation.md` (triggers, actions, hooks).
