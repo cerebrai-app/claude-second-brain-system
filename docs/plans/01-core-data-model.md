@@ -34,7 +34,7 @@ The core provides contracts; implementations provide behavior.
   2. **Storage** — where/how items persist (path template, file format; or an adapter).
   3. **Sort** — named orderings (e.g. `due-then-priority`).
   4. **Filter** — named predicates/views (e.g. `actionable-today`).
-  5. **Automation** — triggers (on-create, on-change, on-schedule, on-capture) and actions.
+  5. **Automation** — triggers (on-create, on-change, on-capture, manual; on-schedule is post-MVP, doc 05) and actions.
   6. **Relations** — typed links to other items (see below).
 
 ## Core types (strawman)
@@ -103,8 +103,7 @@ filters:
 automation:
   - on: create
     do: [ { action: link-inbox-source } ]
-  - on: schedule
-    cron: "0 8 * * *"
+  - on: manual
     do: [ { action: surface, filter: actionable-today } ]
   - on: change
     when: "status -> done"

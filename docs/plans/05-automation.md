@@ -22,7 +22,7 @@ Some rules belong to no single implementation: a daily review that reads `task` 
 project. These live in `.brain/automation.yml`, a versioned vault config file with its own `automation:` list, migrated with the vault (doc 02).
 
 **Restrictions** *(Decided)*:
-- Only the **`schedule`** and **`manual`** triggers. Event triggers (`create`, `update`, `capture`, `archive`, `unarchive`, `relation`,
+- Only the **`manual`** trigger in the MVP (**`schedule`** is post-MVP, see Scheduling). Event triggers (`create`, `update`, `capture`, `archive`, `unarchive`, `relation`,
   `before_delete`) are per-implementation only, so event chains stay attributable to one implementation and loop protection stays simple.
 - Same action set, validation, approval (`claude` per proposal), logging, unattended queue and permission rules as implementation rules.
 - Rule ids are namespaced `vault/<id>` in logs, approvals and `/brain run vault/<id>`, so they cannot collide with `<impl>/<rule-id>`.
@@ -37,7 +37,7 @@ automation:
     requires:
       - { type: task, impl: task }
       - { type: note, impl: journal, min_version: 2 }   # min_version optional (implementation version, doc 02)
-    on: { schedule: "0 8 * * *" }
+    on: manual                           # `schedule` is post-MVP
     do:
       - action: surface
         impl: task                       # explicit: which implementation's named filter/sort
@@ -76,7 +76,7 @@ automation:
         field: source
         value: inbox
   - id: morning-surface
-    on: { schedule: "0 8 * * *" }
+    on: manual
     do:
       - action: surface
         filter: actionable-today     # a named filter from this implementation (natural language, doc 01)
@@ -118,7 +118,7 @@ Because `when` involves Claude, a rule with `when` **cannot run unattended** (no
 | `capture` | An item is created in the Inbox area (doc 01), including by triage-by-capture flows. Fires in addition to `create`. | the new envelope |
 | `archive` / `unarchive` | An item moves into or out of the Archive. | envelope |
 | `relation` | A relation is added to or removed from an item: `on: { relation: blocked_by, added: true }`. | envelope, relation name, ref, added/removed |
-| `schedule` | A cron time elapses (see Scheduling). | `{ scheduled_for, fired_at }` |
+| `schedule` | **Post-MVP.** A cron time elapses (see Scheduling). | `{ scheduled_for, fired_at }` |
 | `before_delete` | Just before a **user-requested permanent delete** of an item (doc 03). Synchronous; can veto. See below. | the envelope being deleted, `requested_by` |
 | `manual` | The user invokes the rule by id (`/brain run <impl>/<rule-id>`), optionally on selected items. | selection, or none |
 
@@ -181,7 +181,7 @@ Example: write today's actionable tasks into the daily journal note.
 
 ```yaml
 - id: daily-journal-tasks
-  on: { schedule: "0 8 * * *" }
+  on: manual
   do:
     - action: surface
       filter: actionable-today
@@ -285,17 +285,25 @@ Reconciliation runs in a dedicated **sub-agent** started at session start, in th
   dispatch, those items are re-detected next time (events are keyed by `(ref, revision)` so they dispatch once).
 - Logged timings (per binding: duration, requests, retries, pages) feed the latency measurement in doc 03.
 
-## Scheduling
+## Scheduling (post-MVP)
+
+**Not in the MVP** *(Decided)*. The `schedule` trigger is reserved but not implemented: a rule using `on: schedule` is rejected at load time with
+"schedule triggers are not supported yet". In the MVP, time-based work is done by running a rule by hand (`manual`, e.g. `/brain run vault/daily-journal-tasks`)
+in an interactive session. The design below is kept so the trigger can be added without changing rule shape.
 
 Claude Code plugins have no always-on process, so schedules cannot fire on their own.
 
-- **Catch-up at session start (MVP):** at the start of a session the plugin evaluates each `schedule` rule against its last-run time
+- **Catch-up at session start:** at the start of a session the plugin evaluates each `schedule` rule against its last-run time
   (stored in `.brain/automation/state.json`, git-ignored) and runs the ones that are due, at most once per missed window (missed runs
   are not replayed).
-- **External trigger (optional):** the user may run the plugin non-interactively from cron, a CI job or a scheduled Claude Code task
+- **External trigger:** the user may run the plugin non-interactively from cron, a CI job or a scheduled Claude Code task
   (`claude -p "/brain run-due"`). Deterministic rules run; rules that need Claude or approval are queued.
 
-## Unattended runs and pending approvals
+## Unattended runs and pending approvals (post-MVP)
+
+In the MVP every rule runs inside an interactive session (events from edits or reconciliation, and `manual` runs), so approvals happen in place and
+there is no pending queue. This section applies once non-interactive runs exist (scheduled or external triggers, above). The pending-file layout is
+reserved.
 
 Rules that need a person (`claude` actions, or `when` conditions) cannot complete when nobody is present. They are written to a queue:
 `.brain/automation/pending/<timestamp>-<rule-id>.json`, containing the event and, if already computed, the proposal. The next interactive
@@ -329,7 +337,7 @@ Pending approval files reference rule ids and are discarded (with a note) if the
 5. ~~Condition language~~ — resolved: **`match` (structural) and `when` (natural language) are sufficient.**
 6. ~~`surface` destinations~~ — resolved: results can be **bound with `as:` and used as input to later actions**, e.g. writing a task list into a daily journal note via `write_body`. (Was: where reports go beyond the session.)
 7. ~~Cross-item and cross-implementation rules~~ — resolved: **event rules stay per-implementation** (a rule on `task` cannot react to a `project` change; model it as a rule on the project that edits its tasks). **Cross-implementation `schedule`/`manual` rules are allowed at the vault level** with a mandatory `requires` list (see Vault-level automation).
-8. ~~Session-start cost~~ — resolved for sync: a **self-rate-limiting sync sub-agent** (see Sync sub-agent). Remaining: the rule that decides which `schedule` rules are "due" when many exist, and defaults for `sync.budget`.
+8. ~~Session-start cost~~ — resolved for sync: a **self-rate-limiting sync sub-agent** (see Sync sub-agent). Remaining: defaults for `sync.budget`. The "which `schedule` rules are due" question moves with scheduling to post-MVP.
 
 ## Next steps
 
