@@ -1,0 +1,178 @@
+# 05 — Automation
+
+Status: **Draft** · Depends on: [01 — Core Data Model](01-core-data-model.md), [03 — Storage Contract](03-storage-contract.md)
+
+## Goal
+
+Let each implementation declare automation: reactions to things that happen to its items (and to time), made of built-in
+actions, user scripts, and Claude instructions. Anything that can change data without a person looking must be predictable;
+anything that relies on Claude's judgment must be approved first.
+
+## Where automation lives
+
+In the `automation:` list of an implementation definition (doc 01), so it follows the implementation's lifecycle, versioning
+and migrations (doc 02). The `Archive` core type is not extensible and has no automation; *archive/unarchive events on items*
+are triggers for those items' own implementations.
+
+```yaml
+automation:
+  - id: link-inbox-source            # unique within the implementation; used in logs and approvals
+    on: create
+    do:
+      - action: set_field
+        field: source
+        value: inbox
+  - id: morning-surface
+    on: { schedule: "0 8 * * *" }
+    do:
+      - action: surface
+        filter: actionable-today     # a named filter from this implementation (natural language, doc 01)
+        sort: due-then-priority
+  - id: log-completion
+    on: update
+    match: { changed: [status], to: { status: done } }
+    do:
+      - action: hook
+        run: ".brain/hooks/log-completion"
+  - id: triage-suggest
+    on: capture
+    when: "The captured text mentions a deadline or a person's name."
+    do:
+      - action: claude                  # requires approval every time
+        instruction: "Suggest an Area and Project for this item and a due date if one is implied."
+```
+
+## Rule shape
+
+| Key | Meaning |
+|---|---|
+| `id` | Unique within the implementation. |
+| `on` | The trigger (below). |
+| `match` | Optional **structural** condition over the event (types, changed fields, new values, relation names). Deterministic. |
+| `when` | Optional **natural-language** condition, judged by Claude (same interpretation model as sorts/filters, doc 01). Evaluated only after `match` passes. A `when` that cannot be judged confidently is treated as **false** and logged. |
+| `do` | Ordered list of actions. Stops at the first failing action unless it has `on_error: continue`. |
+| `enabled` | Defaults to true. A rule can be disabled without being removed. |
+
+Because `when` involves Claude, a rule with `when` **cannot run unattended** (no Claude available) and is queued as pending
+(see Unattended runs). Rules with only `match` are fully deterministic.
+
+## Triggers
+
+| Trigger | Fires when | Event payload |
+|---|---|---|
+| `create` | An item of this implementation is created. | the new envelope |
+| `update` | An item is updated. | before and after envelopes, `changed` field names |
+| `capture` | An item is created in the Inbox area (doc 01), including by triage-by-capture flows. Fires in addition to `create`. | the new envelope |
+| `archive` / `unarchive` | An item moves into or out of the Archive. | envelope |
+| `relation` | A relation is added to or removed from an item: `on: { relation: blocked_by, added: true }`. | envelope, relation name, ref, added/removed |
+| `schedule` | A cron time elapses (see Scheduling). | `{ scheduled_for, fired_at }` |
+| `manual` | The user invokes the rule by id (`/brain run <impl>/<rule-id>`), optionally on selected items. | selection, or none |
+
+`delete` (permanent) has no trigger: it is the exceptional case (doc 03), and the item is gone. A `before_delete` safeguard may be
+added later (open question).
+
+## Actions
+
+All actions work only through the storage contract (doc 03) and core validation, never by touching files directly, so they behave the
+same on every adapter.
+
+### Built-in actions
+
+| Action | Effect |
+|---|---|
+| `set_field` | Set a field on the triggering item (validated against the schema). |
+| `add_relation` / `remove_relation` | Edit a relation on the triggering item. |
+| `create_item` | Create an item of any type, using the resolved default implementation (doc 01) unless `impl` is given. |
+| `archive` | Archive the triggering item (or a referenced one). |
+| `surface` | Produce a **report** of items matching a named filter/sort, shown to the user in the session or written to a configured output. Read-only. |
+| `notify` | Emit a message to the user via the session (or a configured notifier hook). |
+
+Built-ins are deterministic and idempotent where possible (`set_field` to the same value is a no-op).
+
+### `hook` (script)
+
+Runs a user executable from the brain repo with the event as JSON on stdin and a JSON result on stdout, using the same conventions as
+script adapters (doc 03): one process per call, timeout, error codes, credentials from environment, stderr surfaced on failure.
+A hook may return **operations** (the same operation set as the built-ins, e.g. `{"op":"set_field",...}`), which the plugin validates and applies
+itself, or just `{"ok":true}` if it acts on the outside world. The plugin shows the command and requires confirmation before the first
+run of a new or changed hook.
+
+### `claude` (natural-language instruction)
+
+A natural-language instruction carried out by Claude. **Every execution requires user approval before anything is applied.**
+
+1. **Propose.** Claude receives the instruction, the event payload and read-only access to the items it needs, and returns a **proposal**:
+   an ordered list of operations from the same operation set as built-ins (`set_field`, `create_item`, `add_relation`, `archive`, `notify`, ...),
+   plus a short rationale. It cannot write, run commands, or call hooks while proposing.
+2. **Review.** The user sees the rule id, the instruction, the triggering event, the exact operations (as diffs) and the rationale.
+3. **Approve / edit / reject.** Approval applies the operations **exactly as shown** through the normal storage and validation path.
+   Editing re-validates. Rejection discards the proposal and is logged.
+4. **Apply deterministically.** After approval, no further Claude judgment is involved: the plugin applies the approved operation list, as the
+   migration script does in doc 02. If any operation fails validation, none are applied (all-or-nothing where the adapter allows; otherwise
+   ordered with the partial-failure rules in doc 03).
+
+There is no "always allow" mode in the MVP. Approval is per proposal. (Open question: allow a user to approve a rule's *shape* for repeated runs.)
+
+## Execution model
+
+- **Events** are emitted by the plugin's own storage layer after a successful `create`/`update`/`archive`/... through it. Changes made
+  directly to files or backends outside the plugin do not emit events (open question: detect-on-session-start reconciliation).
+- **Matching:** all enabled rules of the item's implementation whose trigger and `match` fit the event are collected, then ordered by their
+  position in the definition. Rules run **sequentially**.
+- **Loop protection:** every event carries `origin` (rule id chain) and a `depth`. Operations performed by a rule emit events with
+  `depth + 1`; a rule never re-fires on an event whose origin chain contains it, and the chain is cut at depth 5 with a logged warning.
+- **Idempotency:** rules should be safe to re-run; the plugin records `(rule id, event id)` for scheduled and recovered runs so a re-delivered
+  event does not apply twice.
+- **Failure:** a failed action logs an error, stops that rule, and does not roll back already-applied earlier actions of the same rule
+  (they are individually valid operations). The user sees failures in the session and in the log.
+- **Logging:** each rule run appends a JSON line to `.brain/automation/log.jsonl` (git-ignored): rule id, trigger, event id, actions,
+  outcome, duration. This also feeds the latency measurement in doc 03.
+
+## Scheduling
+
+Claude Code plugins have no always-on process, so schedules cannot fire on their own.
+
+- **Catch-up at session start (MVP):** at the start of a session the plugin evaluates each `schedule` rule against its last-run time
+  (stored in `.brain/automation/state.json`, git-ignored) and runs the ones that are due, at most once per missed window (missed runs
+  are not replayed).
+- **External trigger (optional):** the user may run the plugin non-interactively from cron, a CI job or a scheduled Claude Code task
+  (`claude -p "/brain run-due"`). Deterministic rules run; rules that need Claude or approval are queued.
+
+## Unattended runs and pending approvals
+
+Rules that need a person (`claude` actions, or `when` conditions) cannot complete when nobody is present. They are written to a queue:
+`.brain/automation/pending/<timestamp>-<rule-id>.json`, containing the event and, if already computed, the proposal. The next interactive
+session reports the pending count and lets the user review each. Pending entries expire after a configurable period (default 14 days) and
+are re-evaluated against current state before approval, since the item may have changed.
+
+## Permissions and safety
+
+- Automation can only perform operations the core model permits, validated like any user change. It cannot change implementation definitions
+  or the automation list itself.
+- `hook` and `claude` actions are the only paths to external effects. Hooks are user code (trusted by explicit confirmation); `claude`
+  actions never act without per-proposal approval.
+- The Archive's permanent `delete` is **not available** to automation actions in the MVP.
+- Rules can be inspected with a command that lists them, their last run and outcome, and any pending approvals.
+
+## Migrations (doc 02)
+
+`automation:` blocks are part of implementation definitions, so a core-version migration may rewrite them. The dry run's report lists
+rules whose action names, trigger names or payloads change. Hooks are always listed under *Unhandled items* since they are user code.
+Pending approval files reference rule ids and are discarded (with a note) if their rule no longer exists after migration.
+
+## Open questions
+
+1. Should rules also be definable at **Area or Project level** (e.g. "tasks in this project notify me on completion"), mirroring `defaults` overrides (doc 01), or only per implementation? (Leaning: per implementation only for the MVP.)
+2. Events for changes made **outside** the plugin (editing markdown by hand, a backend UI): reconcile at session start by diffing `updated`/`revision`, or ignore? (Leaning: ignore for MVP, document it.)
+3. Approving a `claude` rule's *shape* for repeated runs (a bounded "auto-approve if operations only touch these fields"): worth a later phase?
+4. A `before_delete` safeguard trigger for the exceptional permanent delete (doc 03).
+5. A condition language beyond `match` (structural) and `when` (natural language) if `when` proves too unpredictable.
+6. Where `surface` reports go beyond the session (a file in the vault, a notifier hook).
+7. Cross-item and cross-implementation rules: can a rule on `task` react to a `project` change? (Leaning: no; model it as a rule on the project that edits its tasks.)
+8. Session-start catch-up cost and the rule that decides which rules are "due" when many exist.
+
+## Next steps
+
+1. Resolve the open questions above.
+2. Write `04-sort-filter.md` (how Claude is invoked for sorts/filters, reproducibility), which `when` and `surface` rely on.
+3. Specify the install flow and triage mechanics.
