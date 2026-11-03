@@ -119,7 +119,7 @@ implements the slot's contract (stdin/stdout JSON). Declarative is the default; 
 ## Behavior-slot contracts (to specify next)
 
 - **Storage**: specified in [03 — Storage Contract](03-storage-contract.md).
-- **Sort/Filter**: natural-language descriptions. Claude applies them to a list of items (frontmatter field maps) and returns an ordered or filtered list of item ids. Must be read-only; deterministic wording is encouraged, and ambiguous cases should be resolved by asking or by noting the assumption in the result. Cheap structural filtering (by `type`, `impl`, `status`) may be done by the storage adapter first to limit what Claude reads.
+- **Sort/Filter**: natural-language descriptions evaluated by Claude, specified in [04 — Sorts and Filters](04-sort-filter.md).
 - **Automation**: specified in [05 — Automation](05-automation.md).
 
 ## Open questions
