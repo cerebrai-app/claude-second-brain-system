@@ -50,7 +50,7 @@ Every adapter implements these. All take and return envelopes; all are scoped to
 | `update` | envelope with the `revision` it was read at | envelope | `conflict` if the stored revision differs. Full replace of `fields`/`relations`/`body`. |
 | `archive` | `ref`, `revision` | envelope | **The default way to remove an item.** Reads the item from its implementation's binding, writes it to the **Archive adapter** (type, impl, id, fields, relations, body unchanged), then removes it from the source binding. See Archive adapter for ordering and failure handling. Idempotent. Not valid for `archive` items. |
 | `unarchive` | `ref`, `revision` | envelope | Reverse of `archive`: writes the item back to the binding of its `impl` and removes it from the Archive adapter. |
-| `delete` | `ref`, `revision`, `confirm: "permanent"` | `{ok: true}` | **Exception case:** permanent removal. Requires the explicit `confirm` literal; `unsupported` if the adapter has no hard delete. |
+| `delete` | `ref`, `revision`, `confirm: "permanent"` | `{ok: true}` | **Exception case:** permanent removal. Requires the explicit `confirm` literal; `unsupported` if the adapter has no hard delete. The plugin calls it for a user-requested permanent delete only after its own confirmation prompt **and** after any `before_delete` automation rules (doc 05) have run without blocking; a blocked delete never reaches the adapter. |
 | `list` | `query` (below), `limit`, `cursor` | `{items: [envelope], cursor}` | Always paged: callers pass `limit` and follow `cursor`; adapters cap at `max_page`. Full envelopes only (no reduced or projected items). Returns envelopes, not just refs. Excludes archived items unless the query sets `include_archived` (or `archived_only`, optionally narrowed with `archive: "archive:archive"`). |
 | `resolve` | `ref` | `{binding, found: bool}` | Cheap existence check, used for cross-adapter reference validation. |
 | `describe` | none | capabilities and settings schema | Static; used at install/setup and by the dry-run sampler. |
@@ -241,7 +241,7 @@ errors above.
 
 1. ~~Large lists~~ — resolved: **pagination** (always paged, cursor-based, `max_page` cap); no refs-only or projected items.
 2. ~~Local cache~~ — resolved: **deferred**, possibly adapter-specific. Before implementing, add a way to measure adapter latency (see Next steps).
-3. ~~Delete semantics~~ (Archive is now a core type, see doc 01) — resolved and decided: **archive is the default**, permanent `delete` is the exception (explicit `confirm`). The plugin **always asks for confirmation before a permanent delete**, except the delete that completes an `archive` or a triage move. Archived items are **never purged automatically**.
+3. ~~Delete semantics~~ (Archive is now a core type, see doc 01) — resolved and decided: **archive is the default**, permanent `delete` is the exception (explicit `confirm`). The plugin **always asks for confirmation before a permanent delete** (then runs any `before_delete` automation rules, which can veto it, doc 05), except the delete that completes an `archive` or a triage move. Archived items are **never purged automatically**.
 4. ~~Id mapping files~~ — resolved: a committed JSON **id index in the brain repo**, one file per implementation, `.brain/id-index/<type>/<impl-id>.json` (see Id index). Impl ids must be unique within a core type.
 5. ~~Batch reads~~ — resolved: **no `read_many`**; individual reads for now. Revisit with latency data.
 6. ~~Attachments~~ — resolved: **out of scope** for now.

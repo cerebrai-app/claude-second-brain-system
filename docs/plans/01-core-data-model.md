@@ -119,7 +119,10 @@ implements the slot's contract (stdin/stdout JSON). Declarative is the default; 
 
 - **Storage**: specified in [03 — Storage Contract](03-storage-contract.md).
 - **Sort/Filter**: natural-language descriptions evaluated by Claude, specified in [04 — Sorts and Filters](04-sort-filter.md).
-- **Automation**: specified in [05 — Automation](05-automation.md).
+- **Automation**: specified in [05 — Automation](05-automation.md). Rules in an implementation's `automation:` list can use the `manual` and event
+  triggers (including `before_delete`, a veto-only safeguard on permanent delete) and the built-in actions, including `write_body` (edit an item's markdown
+  body) and `surface` results bound with `as:` for use by later actions. Rules that span implementations are **vault-level**: they live in
+  `second-brain/.brain/automation.yml`, may use only the `manual` trigger in the MVP, and must declare the implementations they `require`.
 
 ## Open questions
 
@@ -178,7 +181,7 @@ defaults:
 
 The plugin's setup flow runs at install and:
 
-1. Creates `second-brain/.brain/config.yml` (`version`, the vault `name`, the `archive` adapter choice, and the location of implementation definitions).
+1. Creates `second-brain/.brain/config.yml` (`version`, the vault `name`, the `archive` adapter choice, and the location of implementation definitions). Vault-level automation, if any, lives beside it in `.brain/automation.yml` (doc 05), created on first use.
 2. Creates the system Archive (`archive:archive`) and the Inbox area item with `defaults` chosen by the user (or built-in starters).
 3. Scaffolds starter implementation definitions for any chosen implementation that does not exist yet.
 
