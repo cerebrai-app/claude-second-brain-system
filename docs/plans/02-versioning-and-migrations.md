@@ -82,8 +82,8 @@ There is **no per-object version marker**: not every storage backend can persist
   either re-runs the same `migrate.py` (resume) or discards everything with git (`git restore`/`git clean` on the paths in
   `plan.json`) and removes the marker.
 - **Non-file storage** (external adapters): the script can only act on them through their adapter's script protocol (doc 03).
-  Writes there are not covered by git rollback, so such steps must be idempotent too, and the risk level is at least
-  `medium` (and `high` if the step is not safely re-runnable).
+  Writes there are not covered by git rollback, so such steps must be idempotent too. They are tested against a sample
+  snapshot (see Required test run), and the risk level is at least `medium` (`high` if the step is not safely re-runnable).
 
 ## Migration flow
 
@@ -132,13 +132,28 @@ The dry run produces **code**, not just a description. Its outputs live in `.bra
     and **a second run is a no-op** (proves idempotency, which resume depends on).
   - Additionally, to exercise resume, the agent interrupts a run partway where practical (e.g. a test-only `--stop-after N`
     flag) and confirms a re-run completes to the same final tree as an uninterrupted run.
-  - External-storage steps cannot be tested in a copy; the report states they were not covered, which raises the risk level.
+  - **External storage** is tested against a **sample snapshot** (next subsection) instead of the live system.
   - A failed test run blocks approval; the agent fixes the script and re-tests, and the report records the final passing run only.
+- **External storage sample testing:** git and scratch copies cannot cover objects held by an external adapter, so:
+  1. **Sample.** The agent asks the adapter (doc 03 script protocol, `list` + `read`) for a sample of its objects and saves it to
+     `sample.json` in the dry-run folder. JSON, because the scripts are standard-library Python (no YAML parser); the
+     sample holds each object's core fields, impl fields and ref (`<type>:<id>`), with secrets and large bodies redacted or truncated.
+  2. **Sampling rule.** Stratified: for each type and implementation the migration touches, take up to K objects (default 10),
+     always including edge cases the migration doc names (missing optional fields, unusual values, empty relations) and the
+     objects with the most unusual field sets. Record sample size versus total count per type.
+  3. **Patch.** In the test run, `migrate.py` runs with a **fixture adapter** that serves `sample.json` instead of the real
+     adapter and writes its updates back into a copy of the sample (`sample.migrated.json`). The real system is never contacted or written.
+  4. **Check.** The script's verify assertions run against the patched sample, and a second run over `sample.migrated.json` must be a no-op.
+  5. **Report.** The report includes the before/after of every sampled object (or a diff for large ones) and the coverage numbers.
+  - A sample cannot prove the full data set migrates cleanly. External-storage steps therefore keep a risk floor of `medium`; the
+    risk is `high` if coverage is low (e.g. under ~10% of a type with irregular data), a step is not safely re-runnable, or the
+    adapter's write path cannot be exercised by the fixture.
+  - When applying for real, the script writes to the real adapter through the same protocol it used in the fixture.
 - **Report contents:**
   1. **Summary:** plain-language overview, counts (files touched, items changed, definitions changed), anything needing a user decision, and the **risk level**.
   2. **Risk level:** `low` | `medium` | `high` with a one-to-three-line justification.
   3. **Planned changes:** per file diff or description for large mechanical changes.
-  4. **Test run:** result of the required test run (pass/fail, files changed, idempotency and resume results, anything not covered).
+  4. **Test run:** result of the required test run (pass/fail, files changed, idempotency and resume results, external-storage sample coverage per type, anything not covered).
   5. **Decisions made:** each judgement call and the answer baked into the script.
   6. **Unhandled items:** things the script deliberately does not touch (e.g. script adapters, hooks), flagged for human attention.
 - **Risk rubric** (highest level any single factor reaches):
