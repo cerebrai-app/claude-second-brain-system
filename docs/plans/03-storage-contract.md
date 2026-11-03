@@ -156,11 +156,11 @@ Error (exit code non-zero **or** `ok: false`):
 For backends that cannot store the plugin `id`, the plugin keeps a JSON **id index** mapping `ref` to native id. It is
 **source-of-truth data, not a cache**.
 
-- **Location:** the brain repo working directory, one file per implementation, named by the implementation id:
-  `.brain/id-index/<impl-id>.json` (e.g. `.brain/id-index/linear-task.json`). **Committed to git** like any other data.
+- **Location:** the brain repo working directory, one file per implementation, in a folder for its core type and named by the implementation id:
+  `.brain/id-index/<type>/<impl-id>.json` (e.g. `.brain/id-index/task/linear-task.json`). **Committed to git** like any other data.
 - **Shape:** `{ "impl": "linear-task", "entries": { "task:01J...": { "native_id": "ENG-123" } } }`.
-- **Implementation ids must be unique across the vault** (not only within a core type), since the file is named by impl id alone.
-  Setup and validation reject a duplicate impl id.
+- **Implementation ids must be unique within a core type** (the same id may be reused under different types). This matches the
+  definition layout `.brain/impls/<type>/<impl>.md` (doc 01). Setup and validation reject a duplicate impl id within a type.
 - **Written by the plugin**, never by the script adapter: the script returns the native id from `create`; the plugin records it
   after a successful call and passes it back to the script in later requests (`args.native_id`).
 - **Recovery:** because it is in git, history is the backup. If an entry is lost, an adapter that can search by a stable key may
@@ -204,7 +204,7 @@ The adapter's `describe` reports `archive_adapter: true` only when it meets thes
 1. ~~Large lists~~ — resolved: **pagination** (always paged, cursor-based, `max_page` cap); no refs-only or projected items.
 2. ~~Local cache~~ — resolved: **deferred**, possibly adapter-specific. Before implementing, add a way to measure adapter latency (see Next steps).
 3. Remove it from the source binding (a permanent `delete` there is correct because the item now lives in the Archive).
-4. ~~Id mapping files~~ — resolved: a committed JSON **id index in the brain repo**, one file per implementation named by impl id, `.brain/id-index/<impl-id>.json` (see Id index). Impl ids must be vault-unique.
+4. ~~Id mapping files~~ — resolved: a committed JSON **id index in the brain repo**, one file per implementation, `.brain/id-index/<type>/<impl-id>.json` (see Id index). Impl ids must be unique within a core type.
 
 `unarchive` is the mirror: create in the impl's binding, then delete from the Archive adapter. If the item's `impl` no longer exists,
 unarchive requires the user to pick a target implementation of the same type (the plugin converts the item per doc 01 triage rules).
