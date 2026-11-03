@@ -15,6 +15,7 @@ The core provides contracts; implementations provide behavior.
 | Core types | `Note`, `Task`, `Project`, `Area`, `Person` (PARA-flavored) |
 | Extension mechanism | **Hybrid**: declarative definition files by default, script/hook adapters as an escape hatch |
 | Default storage | Markdown files with YAML frontmatter in the `second-brain` repo (git-versioned) |
+| Sort/filter language | **Natural language, interpreted by Claude.** Sorts and filters are plain-English descriptions; a formal expression language can be added later as an optimization. |
 | Inheritance | An implementation `extends` a **core type only**; no implementation-to-implementation inheritance. Shared behavior is reused by copying or by referencing named sorts/filters/actions, not by extending. |
 
 ## Concepts
@@ -76,9 +77,9 @@ storage:
   adapter: markdown            # built-in
   path: "tasks/{status}/{id}.md"
 sorts:
-  due-then-priority: [ due asc, priority desc ]
+  due-then-priority: "Soonest due date first; undated tasks last; ties broken by higher priority first."
 filters:
-  actionable-today: "status == open and (due == null or due <= today) and not blocked"
+  actionable-today: "Open tasks that are not blocked and are either undated or due today or earlier."
 automation:
   - on: create
     do: [ { action: link-inbox-source } ]
@@ -98,12 +99,12 @@ implements the slot's contract (stdin/stdout JSON). Declarative is the default; 
 ## Behavior-slot contracts (to specify next)
 
 - **Storage**: `create`, `read`, `update`, `delete`, `list(query)`, `resolve(ref)`.
-- **Sort/Filter**: pure functions over item field maps; expression language TBD.
+- **Sort/Filter**: natural-language descriptions. Claude applies them to a list of items (frontmatter field maps) and returns an ordered or filtered list of item ids. Must be read-only; deterministic wording is encouraged, and ambiguous cases should be resolved by asking or by noting the assumption in the result. Cheap structural filtering (by `type`, `impl`, `status`) may be done by the storage adapter first to limit what Claude reads.
 - **Automation**: trigger event payload → ordered action list; actions are built-in or hooks.
 
 ## Open questions
 
-1. Expression language for filters/sorts: tiny custom DSL vs. JSONLogic vs. delegating to Claude at runtime?
+1. ~~Expression language~~ — resolved: natural language for now. Follow-ups: reproducibility across runs, cost at large vault sizes, and when to add a formal fallback.
 2. ~~Inheritance~~ — resolved: core type only (see Decisions).
 3. Multiple implementations per core type in one vault: which one does "new task" default to? (per-area default? config?)
 4. Cross-implementation relations (a `linear-task` blocked by a `gtd-task`): is resolution via `<type>:<id>` enough?
