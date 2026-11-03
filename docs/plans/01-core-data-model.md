@@ -16,6 +16,7 @@ The core provides contracts; implementations provide behavior.
 | Extension mechanism | **Hybrid**: declarative definition files by default, script/hook adapters as an escape hatch |
 | Default storage | Markdown files with YAML frontmatter in the `second-brain` repo (git-versioned) |
 | Sort/filter language | **Natural language, interpreted by Claude.** Sorts and filters are plain-English descriptions; a formal expression language can be added later as an optimization. |
+| Default implementation | **Per-vault, set at plugin install.** New items are captured into an **inbox**, and the vault's config names which implementation backs it. No per-area override for now. |
 | Inheritance | An implementation `extends` a **core type only**; no implementation-to-implementation inheritance. Shared behavior is reused by copying or by referencing named sorts/filters/actions, not by extending. |
 
 ## Concepts
@@ -106,11 +107,25 @@ implements the slot's contract (stdin/stdout JSON). Declarative is the default; 
 
 1. ~~Expression language~~ — resolved: natural language for now. Follow-ups: reproducibility across runs, cost at large vault sizes, and when to add a formal fallback.
 2. ~~Inheritance~~ — resolved: core type only (see Decisions).
-3. Multiple implementations per core type in one vault: which one does "new task" default to? (per-area default? config?)
+3. ~~Default implementation~~ — resolved: per-vault, configured at install, for the inbox (see Decisions). Follow-ups: the exact install flow and config file shape (see below), and how triage maps an inbox item to a target type/implementation.
 4. Cross-implementation relations (a `linear-task` blocked by a `gtd-task`): is resolution via `<type>:<id>` enough?
 5. Where does the plugin's own code live vs. user definitions? Proposed: core contracts in `plugins/brain/`, user definitions in the `second-brain` repo.
 6. Schema evolution / migrations when an implementation changes fields.
 7. Should `Person`/`Area` be extensible at all, or fixed? (Proposed: all five extensible.)
+
+## Vault config (proposed, set at install)
+
+Written to `second-brain/.brain/config.yml` by the plugin's install/setup flow:
+
+```yaml
+version: 1
+inbox:
+  impl: default-inbox     # implementation that backs captured items
+```
+
+The setup flow asks which implementation to use for the inbox and scaffolds a starter definition if none exists.
+Captured items land in the inbox as that implementation; **triage** later converts an item into a `Note`, `Task`,
+etc., using the target type's own implementation rules (conversion mechanics TBD).
 
 ## Next steps
 
