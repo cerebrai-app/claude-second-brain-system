@@ -107,7 +107,7 @@ implements the slot's contract (stdin/stdout JSON). Declarative is the default; 
 
 1. ~~Expression language~~ — resolved: natural language for now. Follow-ups: reproducibility across runs, cost at large vault sizes, and when to add a formal fallback.
 2. ~~Inheritance~~ — resolved: core type only (see Decisions).
-3. ~~Default implementation~~ — resolved: cascading Project → Area → Inbox (see Decisions and Default resolution). Follow-ups: install flow details, and whether a Project may override defaults for core types other than its own contents (e.g. Notes and Tasks).
+3. ~~Default implementation~~ — resolved: cascading Project → Area → Inbox (see Decisions and Default resolution). Project overrides are limited to types that live inside a Project (`task`, `note`). Follow-up: install flow details.
 4. Cross-implementation relations (a `linear-task` blocked by a `gtd-task`): is resolution via `<type>:<id>` enough?
 5. Where does the plugin's own code live vs. user definitions? Proposed: core contracts in `plugins/brain/`, user definitions in the `second-brain` repo.
 6. Schema evolution / migrations when an implementation changes fields.
@@ -154,7 +154,7 @@ defaults:
 ---
 ```
 
-`defaults` is a core field on `Area` and `Project`, so every implementation of those types supports it.
+`defaults` is a core field on `Area` and `Project`, so every implementation of those types supports it. An Area (including the Inbox) may set a default for any core type; a **Project may set defaults only for the types that live inside it: `task` and `note`**. Other keys on a Project are a validation error.
 
 ## Install-time setup
 
