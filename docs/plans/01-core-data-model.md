@@ -16,7 +16,7 @@ The core provides contracts; implementations provide behavior.
 | Extension mechanism | **Hybrid**: declarative definition files by default, script/hook adapters as an escape hatch |
 | Default storage | Markdown files with YAML frontmatter in the `second-brain` repo (git-versioned) |
 | Sort/filter language | **Natural language, interpreted by Claude.** Sorts and filters are plain-English descriptions; a formal expression language can be added later as an optimization. |
-| Default implementation | **Per-vault, set at plugin install.** New items are captured into an **inbox**, and the vault's config names which implementation backs it. No per-area override for now. |
+| Default implementation | **Cascading overrides: Project → Area → Inbox.** The **Inbox is the default Area**: any item or Project with no explicit area belongs to it. The Inbox's defaults are the vault-wide defaults and are configured at plugin install. Areas and Projects may each override them. |
 | Inheritance | An implementation `extends` a **core type only**; no implementation-to-implementation inheritance. Shared behavior is reused by copying or by referencing named sorts/filters/actions, not by extending. |
 
 ## Concepts
@@ -107,25 +107,65 @@ implements the slot's contract (stdin/stdout JSON). Declarative is the default; 
 
 1. ~~Expression language~~ — resolved: natural language for now. Follow-ups: reproducibility across runs, cost at large vault sizes, and when to add a formal fallback.
 2. ~~Inheritance~~ — resolved: core type only (see Decisions).
-3. ~~Default implementation~~ — resolved: per-vault, configured at install, for the inbox (see Decisions). Follow-ups: the exact install flow and config file shape (see below), and how triage maps an inbox item to a target type/implementation.
+3. ~~Default implementation~~ — resolved: cascading Project → Area → Inbox (see Decisions and Default resolution). Follow-ups: install flow details, and whether a Project may override defaults for core types other than its own contents (e.g. Notes and Tasks).
 4. Cross-implementation relations (a `linear-task` blocked by a `gtd-task`): is resolution via `<type>:<id>` enough?
 5. Where does the plugin's own code live vs. user definitions? Proposed: core contracts in `plugins/brain/`, user definitions in the `second-brain` repo.
 6. Schema evolution / migrations when an implementation changes fields.
 7. Should `Person`/`Area` be extensible at all, or fixed? (Proposed: all five extensible.)
 
-## Vault config (proposed, set at install)
+## Default implementation resolution
 
-Written to `second-brain/.brain/config.yml` by the plugin's install/setup flow:
+When creating an item of core type `T` (capture, triage, or a skill asking for "a new task"), the implementation is chosen by
+the first match in this chain:
 
-```yaml
-version: 1
-inbox:
-  impl: default-inbox     # implementation that backs captured items
+1. The item's **Project** `defaults.T`, if the item belongs to a Project that sets one.
+2. The item's **Area** `defaults.T`, if set (a Project inherits its Area; no area means the Inbox).
+3. The **Inbox** area's `defaults.T` — the vault-wide default.
+4. The plugin's built-in implementation for `T`.
+
+The **Inbox** is a system-created Area (`area:inbox`) that cannot be deleted. Items and Projects with no `area` relation
+belong to it. Because it is an Area, it is just a normal Area item whose `defaults` hold the vault-wide values.
+
+```markdown
+---
+id: inbox
+type: area
+impl: default-area
+title: Inbox
+system: true
+defaults:
+  task: gtd-task
+  note: zettel-note
+  project: default-project
+  person: default-person
+  area: default-area
+---
 ```
 
-The setup flow asks which implementation to use for the inbox and scaffolds a starter definition if none exists.
-Captured items land in the inbox as that implementation; **triage** later converts an item into a `Note`, `Task`,
-etc., using the target type's own implementation rules (conversion mechanics TBD).
+Overrides use the same `defaults` field on any Area or Project:
+
+```markdown
+---
+id: 01JPROJ...
+type: project
+area: area:01JAREA...
+defaults:
+  task: linear-task       # tasks in this project are stored/managed as Linear tasks
+---
+```
+
+`defaults` is a core field on `Area` and `Project`, so every implementation of those types supports it.
+
+## Install-time setup
+
+The plugin's setup flow runs at install and:
+
+1. Creates `second-brain/.brain/config.yml` (`version`, and the location of implementation definitions).
+2. Creates the Inbox area item with `defaults` chosen by the user (or built-in starters).
+3. Scaffolds starter implementation definitions for any chosen implementation that does not exist yet.
+
+**Triage** later moves an item out of the Inbox by assigning it an Area and/or Project and, if the resolved default
+implementation differs, converting it (conversion mechanics TBD).
 
 ## Next steps
 
