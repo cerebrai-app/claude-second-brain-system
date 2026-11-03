@@ -66,10 +66,33 @@ Because `when` involves Claude, a rule with `when` **cannot run unattended** (no
 | `archive` / `unarchive` | An item moves into or out of the Archive. | envelope |
 | `relation` | A relation is added to or removed from an item: `on: { relation: blocked_by, added: true }`. | envelope, relation name, ref, added/removed |
 | `schedule` | A cron time elapses (see Scheduling). | `{ scheduled_for, fired_at }` |
+| `before_delete` | Just before a **user-requested permanent delete** of an item (doc 03). Synchronous; can veto. See below. | the envelope being deleted, `requested_by` |
 | `manual` | The user invokes the rule by id (`/brain run <impl>/<rule-id>`), optionally on selected items. | selection, or none |
 
-`delete` (permanent) has no trigger: it is the exceptional case (doc 03), and the item is gone. A `before_delete` safeguard may be
-added later (open question).
+There is no after-the-fact `delete` trigger: the item is gone. The `before_delete` trigger is the only hook into permanent delete.
+
+### `before_delete`
+
+A safeguard that runs **before** a permanent `delete` (doc 03) and can stop it.
+
+- **Fires only** for user-requested permanent deletes, after the plugin's own confirmation prompt and before the `delete` call. It does **not** fire
+  for the internal deletes that complete an `archive` or a triage move (doc 03), since the item lives on. Deletes made outside the plugin cannot be
+  intercepted and are only seen as a *missing item* by reconciliation.
+- **Allowed actions:** `notify`, `surface`, `hook`, `claude`, and `block`. Actions that mutate the item are rejected at load time.
+- **`block`:** `- action: block` with a `reason`; the delete is cancelled and the reason shown to the user. A failing action, or a `hook` that returns
+  `{"ok":false}` or `{"block":true,"reason":"..."}`, also blocks.
+- **Fail closed:** if a matching rule cannot complete (it needs Claude or approval and none is available, a hook errors or times out), the delete does
+  **not** proceed. A `before_delete` rule is never queued as pending; permanent delete is only ever interactive.
+- **Example:**
+  ```yaml
+  - id: keep-linked-projects
+    on: before_delete
+    match: { relation_present: linked_from }   # structural
+    do:
+      - action: block
+        reason: "Still referenced; archive it instead."
+  ```
+- Rules run in definition order; the first `block` wins. Permanent delete remains **unavailable as an automation action**; this trigger can only prevent it.
 
 ## Actions
 
@@ -84,10 +107,44 @@ same on every adapter.
 | `add_relation` / `remove_relation` | Edit a relation on the triggering item. |
 | `create_item` | Create an item of any type, using the resolved default implementation (doc 01) unless `impl` is given. |
 | `archive` | Archive the triggering item (or a referenced one). |
-| `surface` | Produce a **report** of items matching a named filter/sort, shown to the user in the session or written to a configured output. Read-only. Evaluation is specified in doc 04; a sort used here must have pinned `keys`, and a filter with a pinned interpretation can run unattended; because it needs Claude, a rule using `surface` cannot run unattended unless the needed results are cached and still valid, and is otherwise queued as pending. |
+| `surface` | Produce a **result set** of items matching a named filter/sort. By default it is shown to the user in the session as a report; with `as:` it is also (or instead, with `show: false`) bound as **input to later actions in the same rule** (below). Read-only. Evaluation is specified in doc 04; a sort used here must have pinned `keys`, and a filter with a pinned interpretation can run unattended; because it needs Claude, a rule using `surface` cannot run unattended unless the needed results are cached and still valid, and is otherwise queued as pending. |
 | `notify` | Emit a message to the user via the session (or a configured notifier hook). |
 
 Built-ins are deterministic and idempotent where possible (`set_field` to the same value is a no-op).
+
+### Using `surface` results as input to later actions
+
+`surface` can collect items for another operation. `as: <name>` binds the result set (ordered `ref`s plus the `fields` and `relations` of each item,
+no bodies unless `include: [body]`) to a rule-scoped variable, available to the **following actions** of that rule:
+
+- in `value:` / `text:` templates as `{{ <name> }}` (rendered via `format:`, e.g. `checklist`, `bullets`, `table`, `refs`, or a template string);
+- as the `items:` input of `write_body`, `create_item`, `add_relation`, `notify`;
+- as an extra field `surface_results` on the stdin JSON of a `hook`, and as read-only context for a `claude` proposal.
+
+The binding exists only for the current rule run; nothing is stored beyond the run (and the log's counts). Evaluation, caching and the unattended
+limits of `surface` are unchanged (see above and doc 04); a failure to evaluate stops the rule.
+
+Example: write today's actionable tasks into the daily journal note.
+
+```yaml
+- id: daily-journal-tasks
+  on: { schedule: "0 8 * * *" }
+  do:
+    - action: surface
+      filter: actionable-today
+      sort: due-then-priority
+      as: todays_tasks
+      show: false
+    - action: write_body
+      target: { find: { type: note, impl: journal, where: { title: "{{ today }}" } }, create_if_missing: true }
+      section: "## Today's tasks"          # replaced in place; created at the end if absent
+      mode: replace_section
+      text: "{{ todays_tasks | checklist }}"
+```
+
+| Action | Effect |
+|---|---|
+| `write_body` | Edit the markdown `body` of the triggering item or a `target` (a `ref`, or `find` over structural fields with optional `create_if_missing`). `mode`: `replace_section` (default; idempotent, replaces the content under a heading), `append`, `prepend`, `replace`. Requires `supports_body` (doc 03); validated and written through `update` with the read `revision`. `find` matching more than one item is an error. |
 
 ### `hook` (script)
 
@@ -111,7 +168,7 @@ A natural-language instruction carried out by Claude. **Every execution requires
    migration script does in doc 02. If any operation fails validation, none are applied (all-or-nothing where the adapter allows; otherwise
    ordered with the partial-failure rules in doc 03).
 
-There is no "always allow" mode in the MVP. Approval is per proposal. (Open question: allow a user to approve a rule's *shape* for repeated runs.)
+There is no "always allow" mode, and no way to pre-approve a rule's shape or "safe" operations. **Approval is always per proposal.** *(Decided.)*
 
 ## Execution model
 
@@ -211,10 +268,10 @@ Pending approval files reference rule ids and are discarded (with a note) if the
 
 1. ~~Rule scope~~ — resolved: **per implementation only**. (Was: should rules also be definable at **Area or Project level** (e.g. "tasks in this project notify me on completion"), mirroring `defaults` overrides (doc 01), or only per implementation? )
 2. ~~External changes~~ — resolved: **detected and emitted as events**, including new objects (see Detecting changes made outside the plugin). (Was: events for changes made **outside** the plugin (editing markdown by hand, a backend UI): reconcile at session start or ignore?)
-3. Approving a `claude` rule's *shape* for repeated runs (a bounded "auto-approve if operations only touch these fields"): worth a later phase?
-4. A `before_delete` safeguard trigger for the exceptional permanent delete (doc 03).
-5. A condition language beyond `match` (structural) and `when` (natural language) if `when` proves too unpredictable.
-6. Where `surface` reports go beyond the session (a file in the vault, a notifier hook).
+3. ~~Approving a `claude` rule's shape~~ — resolved: **no auto-approve**; approval is per proposal, always.
+4. ~~`before_delete` safeguard~~ — resolved: **added** as a trigger (see `before_delete`), veto-only, fail closed.
+5. ~~Condition language~~ — resolved: **`match` (structural) and `when` (natural language) are sufficient.**
+6. ~~`surface` destinations~~ — resolved: results can be **bound with `as:` and used as input to later actions**, e.g. writing a task list into a daily journal note via `write_body`. (Was: where reports go beyond the session.)
 7. Cross-item and cross-implementation rules: can a rule on `task` react to a `project` change? (Leaning: no; model it as a rule on the project that edits its tasks.)
 8. ~~Session-start cost~~ — resolved for sync: a **self-rate-limiting sync sub-agent** (see Sync sub-agent). Remaining: the rule that decides which `schedule` rules are "due" when many exist, and defaults for `sync.budget`.
 
