@@ -62,5 +62,4 @@ These are gaps in the plan rather than deliberate deferrals, kept here so nothin
 
 ## Housekeeping
 
-- The next-steps lists in docs 01, 02 and 04 still reference earlier planning (for example doc 01 lists per-slot specs under older filenames).
-  They should be refreshed or removed when those docs are next edited.
+- The next-steps lists in docs 01 to 05 were refreshed together and each links back here for deferred work.

@@ -254,5 +254,6 @@ errors above.
 
 ## Next steps
 
-1. Add latency measurement for adapters: the plugin records per-operation timings (op, adapter, duration, item count) to a local log, with a `describe`-level summary command, so cache and batching decisions in questions 2 and 5 can be made with data.
-2. Sort/filter and automation are specified in docs 04 and 05.
+1. Add latency measurement for adapters: the plugin records per-operation timings (op, adapter, duration, item count) to a local log, with a `describe`-level summary command, so the cache and batch-read decisions (questions 2 and 5) can be made with data.
+2. Validate the markdown adapter and a script adapter end to end against the contract, including the Archive adapter requirements and `rebuild`.
+3. Deferred items (local cache, `read_many`, changing the Archive adapter) are tracked in [Deferred and Out-of-Scope Items](deferred.md).

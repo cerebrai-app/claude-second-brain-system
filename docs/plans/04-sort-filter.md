@@ -199,5 +199,7 @@ A rule that Claude reads differently from run to run needs rewording. The plugin
 
 ## Next steps
 
-1. Specify the install flow and triage mechanics.
-2. Detail per-type core fields and relations (doc 01 strawman table).
+1. Decide the pinned-interpretation predicate grammar, and whether it ships in the first release or the one after.
+2. Measure with real vaults, then revisit the batch defaults (`max_items_per_call` 20, `direct_sort_max` 10) and the rule quality check sample (3 runs, 50 items, 80% agreement).
+3. Use the latency log from doc 03 to size the result cache and batching.
+4. The install flow and per-type core fields live in doc 01's next steps. Deferred items (`follow` depth above 1) are tracked in [Deferred and Out-of-Scope Items](deferred.md).

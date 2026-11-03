@@ -352,6 +352,7 @@ Pending approval files reference rule ids and are discarded (with a note) if the
 
 ## Next steps
 
-1. Write the install flow and triage mechanics doc (not yet written). Pending approvals, the `capture` trigger and Inbox triage depend on it.
+1. Write the install flow and triage mechanics doc (doc 01). Pending approvals, the `capture` trigger and Inbox triage depend on it.
 2. Decide whether doc 05 moves from **Draft** to reviewed now that its open questions are resolved.
-3. Post-MVP, deliberately deferred here (the full cross-doc list is in [Deferred and Out-of-Scope Items](deferred.md)): `schedule` triggers and catch-up, non-interactive runs (cron, `run-due`) feeding the pending queue, sync self rate limiting, and a sync run budget.
+3. Implement and test the MVP pieces: structural `match`, built-in actions including `write_body` and `surface ... as:`, the `before_delete` veto, the pending queue and `/brain pending`, and the sync sub-agent with its one-minute `rate_limited` retry and checkpoints.
+4. Post-MVP work (`schedule` triggers, non-interactive runs, sync rate limiting, a run budget) is tracked in [Deferred and Out-of-Scope Items](deferred.md).

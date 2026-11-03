@@ -196,6 +196,7 @@ migration report. Rules whose required implementation disappears are marked *blo
 
 ## Next steps
 
-1. Decide open questions above.
-2. Fold the manifest and `defaults` into the install-flow spec.
-3. Start the per-slot contract specs (storage first).
+1. Fold the manifest and `defaults` into the install-flow spec (doc 01, to be written), including the initial manifest created at setup.
+2. Add vault-level automation (`.brain/automation.yml`, doc 05) to the worked migration examples once the first real migration exists.
+3. Build and exercise the dry-run sampler against a real vault to validate the generated `migrate.py` flow.
+4. Deferred items are tracked in [Deferred and Out-of-Scope Items](deferred.md).

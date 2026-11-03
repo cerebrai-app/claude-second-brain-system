@@ -200,6 +200,8 @@ implementation differs, converting it (conversion mechanics TBD).
 
 ## Next steps
 
-1. ~~Specify the manifest and migration doc formats~~ — drafted in doc 02.
-2. Write per-slot contract specs (`02-storage-contract.md`, `03-sort-filter.md`, `04-automation.md`).
-3. Sketch the first built-in implementation of each core type as reference examples.
+1. Write the install flow and triage mechanics doc (setup steps, user-chosen vs. built-in defaults, converting an item between implementations). Docs 02 and 05 depend on it.
+2. Detail per-type core fields and relations, replacing the strawman table.
+3. Sketch the first built-in implementation of each core type as reference examples, used for install-time scaffolding.
+4. Finalize the "proposed" paths (`.brain/manifest.yml`, `plugins/brain/migrations/`, `.brain/impls/...`) once the install flow is written.
+5. Per-slot contracts are done: [03](03-storage-contract.md), [04](04-sort-filter.md), [05](05-automation.md). Deliberately postponed work is tracked in [Deferred and Out-of-Scope Items](deferred.md).
