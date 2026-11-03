@@ -49,12 +49,12 @@ automation:
 | `id` | Unique within the implementation. |
 | `on` | The trigger (below). |
 | `match` | Optional **structural** condition over the event (types, changed fields, new values, relation names). Deterministic. |
-| `when` | Optional **natural-language** condition, judged by Claude (same interpretation model as sorts/filters, doc 01). Evaluated only after `match` passes. A `when` that cannot be judged confidently is treated as **false** and logged. |
+| `when` | Optional **natural-language** condition, judged by Claude (same interpretation model as sorts/filters, doc 01). Evaluated only after `match` passes. A `when` that cannot be judged confidently is treated as **false** and logged. *(Decided: acceptable.)* |
 | `do` | Ordered list of actions. Stops at the first failing action unless it has `on_error: continue`. |
 | `enabled` | Defaults to true. A rule can be disabled without being removed. |
 
 Because `when` involves Claude, a rule with `when` **cannot run unattended** (no Claude available) and is queued as pending
-(see Unattended runs). Rules with only `match` are fully deterministic.
+(see Unattended runs). *(Decided.)* Rules with only `match` are fully deterministic.
 
 ## Triggers
 
@@ -115,8 +115,8 @@ There is no "always allow" mode in the MVP. Approval is per proposal. (Open ques
 
 ## Execution model
 
-- **Events** are emitted by the plugin's own storage layer after a successful `create`/`update`/`archive`/... through it. Changes made
-  directly to files or backends outside the plugin do not emit events (open question: detect-on-session-start reconciliation).
+- **Events** are emitted by the plugin's own storage layer after a successful `create`/`update`/`archive`/... through it, and by
+  **reconciliation** for changes made outside the plugin (next subsection).
 - **Matching:** all enabled rules of the item's implementation whose trigger and `match` fit the event are collected, then ordered by their
   position in the definition. Rules run **sequentially**.
 - **Loop protection:** every event carries `origin` (rule id chain) and a `depth`. Operations performed by a rule emit events with
@@ -127,6 +127,29 @@ There is no "always allow" mode in the MVP. Approval is per proposal. (Open ques
   (they are individually valid operations). The user sees failures in the session and in the log.
 - **Logging:** each rule run appends a JSON line to `.brain/automation/log.jsonl` (git-ignored): rule id, trigger, event id, actions,
   outcome, duration. This also feeds the latency measurement in doc 03.
+
+### Detecting changes made outside the plugin
+
+Items are also edited by hand (markdown files) or in a backend's own UI. The plugin detects these and emits the same events.
+
+- **When:** at session start (before schedule catch-up), and on demand (`/brain sync`). Not continuous; there is no background process.
+- **Seen state:** `.brain/automation/seen/<type>/<impl-id>.json` (git-ignored, rebuildable) holds, per `ref`, the last-seen `revision`
+  and a compact snapshot of `fields` and `relations` (no body). Entries are updated after the plugin's own writes too, so its
+  own changes are not seen as external.
+- **Algorithm per binding:** page through `list` (using `updated_since` where the adapter honors it, otherwise a full paged scan) and compare:
+  - ref not in seen state → a **new object**: emit `create` (and `capture` if it is in the Inbox area).
+  - `revision` differs → emit `update`, with `before` taken from the snapshot and `changed` computed from the field/relation diff.
+  - item now has `archive` set (moved by hand) → emit `archive`; cleared → `unarchive`.
+  - relation added/removed → also emit `relation` events.
+  - ref in seen state but not found by `read`/`resolve` anywhere (including the Archive) → **not** an event; recorded as a *missing item* in the
+    sync report (permanent delete is not a trigger, and validation reports dangling references per doc 03).
+- **Event marking:** reconciled events carry `origin: external` and `detected_at`; they have `depth: 0`, so rules triggered by them run
+  normally. The body of the payload says `before` is a snapshot (fields/relations only).
+- **Validation:** an externally created or changed item is validated against its implementation schema first. If invalid, no rules run on it; it is
+  reported to the user as invalid.
+- **First run:** with no seen state, the plugin builds the baseline silently (no `create` storm). Only changes after the baseline emit events.
+- **External backends** are bound by adapter rate limits and latency; a full scan is bounded by pagination (doc 03) and the cost is logged.
+- Automation does not run for an item whose adapter could not be reached; the failure is reported and the sync resumes next time.
 
 ## Scheduling
 
@@ -162,8 +185,8 @@ Pending approval files reference rule ids and are discarded (with a note) if the
 
 ## Open questions
 
-1. Should rules also be definable at **Area or Project level** (e.g. "tasks in this project notify me on completion"), mirroring `defaults` overrides (doc 01), or only per implementation? (Leaning: per implementation only for the MVP.)
-2. Events for changes made **outside** the plugin (editing markdown by hand, a backend UI): reconcile at session start by diffing `updated`/`revision`, or ignore? (Leaning: ignore for MVP, document it.)
+1. ~~Rule scope~~ — resolved: **per implementation only**. (Was: should rules also be definable at **Area or Project level** (e.g. "tasks in this project notify me on completion"), mirroring `defaults` overrides (doc 01), or only per implementation? )
+2. ~~External changes~~ — resolved: **detected and emitted as events**, including new objects (see Detecting changes made outside the plugin). (Was: events for changes made **outside** the plugin (editing markdown by hand, a backend UI): reconcile at session start or ignore?)
 3. Approving a `claude` rule's *shape* for repeated runs (a bounded "auto-approve if operations only touch these fields"): worth a later phase?
 4. A `before_delete` safeguard trigger for the exceptional permanent delete (doc 03).
 5. A condition language beyond `match` (structural) and `when` (natural language) if `when` proves too unpredictable.
