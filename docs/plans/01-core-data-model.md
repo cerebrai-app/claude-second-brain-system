@@ -59,8 +59,9 @@ Core fields are deliberately minimal; implementations add the rest. **`Archive` 
   Its behavior is fixed by the plugin (browsing, restoring, listing), so every vault's Archive works the same way.
 - An Archive cannot contain an Archive, and cannot itself be archived or deleted.
 - The vault has one system Archive, `archive:main`, created at install (like the Inbox area). Whether more than one is allowed is open.
-- An archived item still follows its own implementation's schema and storage binding; only its membership changes.
-  Restoring returns it to the live vault (to its previous Area/Project when those still exist).
+- An archived item still follows its own implementation's **schema**, but is stored by the Archive's **single storage adapter**
+  (one adapter for the whole vault, chosen at install, which must support all object types; see doc 03), not by its implementation's binding.
+  Restoring writes it back to its implementation's binding (to its previous Area/Project when those still exist).
 
 ## Item shape (markdown + frontmatter)
 

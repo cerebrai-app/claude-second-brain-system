@@ -36,7 +36,7 @@ Linear, Trello, ...) without the rest of the system caring. The contract is the 
   Backends with their own native ids store the native id privately (see `native_id`) and map it to the `id`.
 - `relations` always hold refs (`<type>:<id>`), never native ids or paths.
 - `revision` is opaque, backend-defined (git blob hash, `updated` timestamp, ETag) and used for optimistic concurrency.
-- `archive` is `null` for live items, or the ref of the Archive that contains the item (`archive:main`); `archived_at` is the timestamp. Both are set only by `archive`/`unarchive`, never by `update`. The `Archive` core type itself (doc 01) is not extensible and is always stored by the built-in `markdown` adapter; only the *items inside it* use their own implementation's storage binding.
+- `archive` is `null` for live items, or the ref of the Archive that holds the item (`archive:main`); `archived_at` is the timestamp. Both are set only by `archive`/`unarchive`, never by `update`. Archived items are stored by the **Archive adapter** (see below), not by their implementation's binding.
 - Unknown `fields` are preserved on round trip.
 
 ## Operations
@@ -48,8 +48,8 @@ Every adapter implements these. All take and return envelopes; all are scoped to
 | `create` | envelope without `ref`/`revision`/timestamps (plus a plugin-assigned `id`) | envelope | Fails with `conflict` if `id` exists. |
 | `read` | `ref` | envelope | `not_found` if missing. |
 | `update` | envelope with the `revision` it was read at | envelope | `conflict` if the stored revision differs. Full replace of `fields`/`relations`/`body`. |
-| `archive` | `ref`, `revision`, `archive` (Archive ref, default `archive:main`) | envelope | **The default way to remove an item.** Moves it into the Archive container (type, impl, id unchanged); it stays retrievable by `read` and `resolve`. Idempotent. Not valid for `archive` items. |
-| `unarchive` | `ref`, `revision` | envelope | Reverses `archive`; the item returns to the live vault. |
+| `archive` | `ref`, `revision` | envelope | **The default way to remove an item.** Reads the item from its implementation's binding, writes it to the **Archive adapter** (type, impl, id, fields, relations, body unchanged), then removes it from the source binding. See Archive adapter for ordering and failure handling. Idempotent. Not valid for `archive` items. |
+| `unarchive` | `ref`, `revision` | envelope | Reverse of `archive`: writes the item back to the binding of its `impl` and removes it from the Archive adapter. |
 | `delete` | `ref`, `revision`, `confirm: "permanent"` | `{ok: true}` | **Exception case:** permanent removal. Requires the explicit `confirm` literal; `unsupported` if the adapter has no hard delete. |
 | `list` | `query` (below), `limit`, `cursor` | `{items: [envelope], cursor}` | Paged. Returns envelopes, not just refs. Excludes archived items unless the query sets `include_archived` (or `archived_only`, optionally narrowed with `archive: "archive:main"`). |
 | `resolve` | `ref` | `{binding, found: bool}` | Cheap existence check, used for cross-adapter reference validation. |
@@ -76,7 +76,7 @@ All keys optional, all combined with AND. Adapters apply as much as they can nat
   "adapter": "markdown",
   "capabilities": {
     "query": ["types", "impls", "fields_eq", "relations_include", "updated_since", "include_archived"],
-    "archive": true,
+    "archive_adapter": false,
     "hard_delete": true,
     "native_ids": false,
     "transactions": false,
@@ -100,7 +100,7 @@ The plugin adapts to capabilities (e.g. refuses to bind an implementation with `
   index (`.brain/index/refs.json`, git-ignored, rebuildable by scanning frontmatter `id`s) and falls back to a scan on miss.
 - **Revision:** git blob hash of the file's content as read (or content hash if not in a git repo).
 - **Atomic writes:** write temp file in the same directory, then rename. No partial files on crash.
-- **Archive:** moves the file to the binding's `archive_path` (default `archive/{type}/{impl}/{id}.md`) and sets `archive`/`archived_at` in frontmatter. `unarchive` moves it back to the rendered live path. The id → path index covers archived files, so `read`/`resolve` still work.
+- **As Archive adapter:** may be chosen as the vault's Archive adapter (it satisfies the requirements below). Archived items are stored at `archive/{type}/{impl}/{id}.md` (configurable via the Archive binding's `path`), with the same frontmatter format, plus `archive`/`archived_at`.
 - **Delete:** permanently removes the file. Only on explicit `confirm: "permanent"`; git history still holds prior content, but the adapter does not rely on that.
 - Preserves unknown frontmatter keys and key order on round trip.
 - Git commits are **not** made by the adapter. Committing is the caller's concern (e.g. a skill or automation).
@@ -140,7 +140,7 @@ Error (exit code non-zero **or** `ok: false`):
   `retryable: true` is advisory; the caller retries at most with bounded backoff.
 - **Credentials:** never in request JSON or the repo. The script reads them from environment variables or the user's secret
   store, and `describe` lists the variable names it needs (`requires_env`) so setup can check they exist.
-- **Archive mapping:** the script maps `archive` to the backend's native concept (Linear archive, Trello archived card, a status/label otherwise) and reports it via `describe`. If the backend has none, `archive: false` and the plugin falls back to a label/marker field or refuses the binding; `delete` is never used as a substitute for `archive`.
+- **As Archive adapter:** a script adapter may be the Archive adapter only if its `describe` reports the Archive requirements below. It does not need a native "archive" concept; archived items are ordinary records it stores with `archive`/`archived_at` set. Backends with fixed schemas typically cannot meet the requirements and should not be chosen for the Archive.
 - **Id mapping:** since the plugin assigns `id`, a script for a backend with native ids must store the plugin `id` in the
   backend (a custom field, label, or description marker) or in a mapping file under `.brain/adapters/<name>.map.json`, and
   return `ref` consistently. `describe` reports `native_ids: true` and how it maps.
@@ -157,6 +157,40 @@ Serves envelopes from a JSON file and writes updates to a copy. Implements the s
 including `conflict` on stale `revision`. Used by migration test runs (doc 02) and by authors of script adapters. Never
 selectable in a real binding.
 
+## Archive adapter
+
+The `Archive` core type (doc 01) has **exactly one storage adapter for the whole vault**, chosen at install and recorded in
+`.brain/config.yml`:
+
+```yaml
+archive:
+  adapter: markdown        # or: script
+  path: "archive/{type}/{impl}/{id}.md"
+```
+
+Because the Archive holds objects of **every** type and implementation, the Archive adapter must satisfy all of:
+
+- **All types:** stores items of any core type (`note`, `task`, `project`, `area`, `person`) and any `impl`, including
+  implementations whose definitions have since changed or been removed.
+- **`preserves_unknown_fields: true`:** round-trips arbitrary implementation-specific fields exactly.
+- **`supports_body: true`** and arbitrary-size markdown bodies.
+- **Full relations:** stores `relations` as refs (`<type>:<id>`) without requiring the targets to exist in the same system.
+- **Stable id:** stores the plugin-assigned `id` and `ref` unchanged; `resolve`/`read` by ref work.
+- **`list` with `types`, `impls` and `updated_since`** query keys honored natively or cheaply filterable.
+- **`create` / `read` / `list` / `resolve` / `delete`** (the last used only by `unarchive`).
+
+The adapter's `describe` reports `archive_adapter: true` only when it meets these; setup refuses an adapter that does not.
+`markdown` is the default and always qualifies. Archive is non-extensible: there is one adapter, no per-type or per-impl Archive bindings.
+
+**Archive ordering (create-then-remove, so a failure never loses data):**
+1. `read` the item from its source binding.
+2. `create` it in the Archive adapter (with `archive`/`archived_at` set).
+3. Remove it from the source binding (a permanent `delete` there is correct because the item now lives in the Archive).
+4. If step 3 fails, the item exists in both places; `resolve` prefers the source binding and the plugin reports the pending cleanup. Re-running `archive` is idempotent and finishes it.
+
+`unarchive` is the mirror: create in the impl's binding, then delete from the Archive adapter. If the item's `impl` no longer exists,
+unarchive requires the user to pick a target implementation of the same type (the plugin converts the item per doc 01 triage rules).
+
 ## Cross-adapter references
 
 - A ref `<type>:<id>` does not encode its backend. To follow a ref the plugin asks the bindings that can hold that `type`
@@ -164,7 +198,7 @@ selectable in a real binding.
   binding for the session.
 - An `id` is unique across the whole vault, not per adapter. `create` checks `resolve` on all bindings of that type first
   when `capabilities` do not guarantee uniqueness (ULIDs make collision practically impossible, so this is a safety net).
-- `resolve` finds archived items too and reports the item's `archive` (non-null when archived); a relation to an archived item is **not** dangling, but validation surfaces it as a warning.
+- `resolve` also asks the Archive adapter, and reports the item's `archive` (non-null when archived); a relation to an archived item is **not** dangling, but validation surfaces it as a warning.
 - If a ref resolves nowhere, it is a **dangling reference**: reported by a validation pass, never silently dropped.
 - Moving an item between implementations (triage, doc 01) is `create` in the target binding with the **same id**, then `delete`
   in the source (a permanent delete is correct here: the item lives on under the same id, so archiving would leave a duplicate
@@ -194,8 +228,11 @@ errors above.
 5. Is one process per operation too slow for large lists? A batch op (`read_many`) may be needed.
 6. Binary attachments: out of scope for v1, or `attachments` capability?
 
-7. Can there be more than one Archive (e.g. per Area or per year), or exactly one `archive:main`? (Leaning one for now.)
+7. The Archive adapter is a single vault-wide choice. Can there also be more than one Archive container (e.g. per Area or per year), or exactly one `archive:main`? (Leaning one for now.)
 8. When an Area or Project is archived, do its contained items archive with it (cascade), stay live, or require a choice? (Leaning ask, default cascade.)
+
+9. Migrations (doc 02): archived items belong to the Archive adapter, so a migration script must also run its transforms over archived items, including when the Archive adapter is external.
+10. Changing the Archive adapter after install: needs a defined move procedure (a migration-style script). Out of scope for v1?
 
 ## Next steps
 
