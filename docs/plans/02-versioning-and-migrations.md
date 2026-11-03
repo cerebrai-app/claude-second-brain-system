@@ -96,7 +96,7 @@ interpretation or improvisation happens while changes are made.
 3. **Preflight.** Require a clean git working tree in the brain repo; otherwise stop.
 4. **Dry run (agent).** For one step at a time, the agent reads the migration doc, inspects the brain repo, resolves all
    judgement calls (asking the user), and **generates a migration script** plus a dry-run report (see below).
-   Nothing in the brain repo is modified. The agent may test the script against a scratch copy of the repo.
+   Nothing in the brain repo is modified. The agent **must** test the script (see Required test run) before presenting it.
 5. **Review and confirm.** The user reads the summary, risk level and script, and approves.
 6. **Apply (script, no agent).** The user (or the agent acting only as a launcher) runs the script exactly as saved.
    The script is deterministic, takes the repo path as an argument, performs the changes, runs its own verification,
@@ -124,12 +124,23 @@ The dry run produces **code**, not just a description. Its outputs live in `.bra
   - Includes the migration doc's Verify checks as assertions and fails the run if any fails.
   - Sets `migration_in_progress` in `manifest.yml` first, clears it and sets `core_version` last, then creates the single migration commit (which includes the dry-run folder); never pushes.
   - Python 3 standard library only; no third-party imports. Run as `python3 -I migrate.py <repo-path>`.
+- **Required test run:** before the user is asked to approve, the agent runs `migrate.py` for real (not `--check`) against an
+  isolated copy of the brain repo and records the outcome in `report.md`.
+  - If the brain repo is a git repo: use a **git worktree** at the planned HEAD commit (`git worktree add <tmp> <commit>`), removed afterward.
+  - Otherwise: a **scratch copy** of the directory in a temporary location, deleted afterward.
+  - The test must show: the script exits 0, all verify assertions pass, the resulting diff matches `plan.json`'s file list,
+    and **a second run is a no-op** (proves idempotency, which resume depends on).
+  - Additionally, to exercise resume, the agent interrupts a run partway where practical (e.g. a test-only `--stop-after N`
+    flag) and confirms a re-run completes to the same final tree as an uninterrupted run.
+  - External-storage steps cannot be tested in a copy; the report states they were not covered, which raises the risk level.
+  - A failed test run blocks approval; the agent fixes the script and re-tests, and the report records the final passing run only.
 - **Report contents:**
   1. **Summary:** plain-language overview, counts (files touched, items changed, definitions changed), anything needing a user decision, and the **risk level**.
   2. **Risk level:** `low` | `medium` | `high` with a one-to-three-line justification.
   3. **Planned changes:** per file diff or description for large mechanical changes.
-  4. **Decisions made:** each judgement call and the answer baked into the script.
-  5. **Unhandled items:** things the script deliberately does not touch (e.g. script adapters, hooks), flagged for human attention.
+  4. **Test run:** result of the required test run (pass/fail, files changed, idempotency and resume results, anything not covered).
+  5. **Decisions made:** each judgement call and the answer baked into the script.
+  6. **Unhandled items:** things the script deliberately does not touch (e.g. script adapters, hooks), flagged for human attention.
 - **Risk rubric** (highest level any single factor reaches):
   - `low`: purely mechanical, fully reversible via git, no judgement calls, no unhandled items.
   - `medium`: judgement calls with clear defaults, many items changed, or the doc is marked `breaking: true`.
