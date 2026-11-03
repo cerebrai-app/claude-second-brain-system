@@ -27,7 +27,7 @@ The core provides contracts; implementations provide behavior.
 
 - **Core type** — a contract shipped by the plugin: required fields, allowed relations, and the behavior slots it supports.
 - **Implementation** — a user-defined realization of a core type (e.g. `Task` → `gtd-task`, `linear-task`). A vault may have several per core type.
-- **Item** — an instance of an implementation. Always carries `id`, `type` (core), `impl` (implementation name), `created`, `updated`, `schema_version` (the core version the item conforms to; see doc 02).
+- **Item** — an instance of an implementation. Always carries `id`, `type` (core), `impl` (implementation name), `created`, `updated`.
 - **Behavior slots** — the pluggable parts of an implementation:
   1. **Schema** — fields beyond the core required set, with types and validation.
   2. **Storage** — where/how items persist (path template, file format; or an adapter).
@@ -53,7 +53,6 @@ Core fields are deliberately minimal; implementations add the rest.
 ```markdown
 ---
 id: 01JABCDEF...          # stable, implementation-independent
-schema_version: 1         # core version this item conforms to
 type: task                # core type
 impl: gtd-task            # implementation
 title: Draft Q4 plan

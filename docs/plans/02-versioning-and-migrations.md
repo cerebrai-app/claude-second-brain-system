@@ -68,42 +68,22 @@ Checks proving the step worked (grep for old key returns nothing, sample items p
 How to revert (normally `git revert` of the step's commit).
 ```
 
-## Per-object schema version
+## Partial migrations and recovery
 
-Every object (item, implementation definition, and the Inbox/Area/Project items) carries `schema_version` in its
-frontmatter: the **core version** it conforms to.
+There is **no per-object version marker**: not every storage backend can persist one, so state is tracked at the repo level.
 
-```markdown
----
-id: 01J...
-type: task
-impl: gtd-task
-schema_version: 2
----
-```
-
-- The migration script bumps `schema_version` on each object **as it migrates it**, in the same write as the change.
-- The repo is fully migrated only when every object is at the target version. `manifest.core_version` is updated last,
-  after a full scan confirms this; until then the manifest carries `migration_in_progress: { from: N, to: N+1 }`.
-- **Recovery from a partial migration** (crash, kill, disk error, or a failure the script could not fully roll back):
-  objects already at `to` are skipped, objects at `from` are migrated, and an object at neither is reported as an error.
-  Re-running the same `migrate.py` finishes the job (the script is idempotent per object).
-- Detection: the session-start check also scans for objects whose `schema_version` is below the manifest's `core_version`,
-  or for `migration_in_progress`, and reports a partial migration.
-- New objects are created at the current core version by the plugin.
-- Objects with no `schema_version` are treated as invalid and flagged (migration 0-to-1 is the only place to add it).
-
-### Storage without `schema_version` support
-
-Not every storage adapter can persist a `schema_version` on each object (e.g. an external tracker with fixed fields).
-Each storage adapter therefore declares a capability, `supports_schema_version: true | false` (see the storage contract, doc 03).
-
-- **Supported:** the behavior above applies unchanged.
-- **Not supported:** the adapter's objects are tracked in a **ledger in the brain repo**,
-  `.brain/migration-state/<adapter>.yml`, mapping object ref (`<type>:<id>`) to migrated-to version. The script updates the
-  ledger as it migrates each object, giving the same resume behavior. If the adapter also cannot be written by the
-  script, its objects are listed under **Unhandled items** in the dry-run report and the risk level is `high`.
-- Implementation versions are never stored per item for any adapter.
+- Before changing anything, the script writes `migration_in_progress: { from: N, to: N+1, script: <dry-run folder> }` to
+  `manifest.yml`. It removes the marker and sets `core_version` only after all changes and checks succeed, in the same commit.
+- **Idempotent transforms:** every transformation in the script first tests whether it has already been applied
+  (e.g. the old key is absent / the new key is present) and skips if so. Re-running `migrate.py` on a half-migrated tree
+  therefore finishes the job and never double-applies.
+- **Normal failure:** the script restores the paths it touched and removes the marker (flow step 7).
+- **Crash or kill:** the marker and uncommitted changes remain. The session-start check reports a partial migration. The user
+  either re-runs the same `migrate.py` (resume) or discards everything with git (`git restore`/`git clean` on the paths in
+  `plan.json`) and removes the marker.
+- **Non-file storage** (external adapters): the script can only act on them through their adapter's script protocol (doc 03).
+  Writes there are not covered by git rollback, so such steps must be idempotent too, and the risk level is at least
+  `medium` (and `high` if the step is not safely re-runnable).
 
 ## Migration flow
 
@@ -121,10 +101,9 @@ interpretation or improvisation happens while changes are made.
 6. **Apply (script, no agent).** The user (or the agent acting only as a launcher) runs the script exactly as saved.
    The script is deterministic, takes the repo path as an argument, performs the changes, runs its own verification,
    updates the manifest, and commits `migrate: core N -> N+1`. It never pushes.
-7. **Failure.** If any check fails, the script restores the paths it touched to their pre-run state, aborts without
+7. **Failure.** If any check fails, the script restores the paths it touched to their pre-run state, removes the in-progress marker, aborts without
    committing, and exits non-zero with a message. It never attempts repair. If the process dies before it can restore
-   (crash, kill), the per-object `schema_version` marks what was done and re-running the script resumes it (see Per-object
-   schema version); alternatively the user can discard everything with git.
+   (crash, kill), see Partial migrations and recovery.
 
 ## Dry run and generated migration script
 
@@ -138,12 +117,12 @@ The dry run produces **code**, not just a description. Its outputs live in `.bra
 
 - **Script requirements:**
   - Deterministic and self-contained; all judgement calls from the migration doc are **already resolved and baked in** by the dry run. The script asks no questions.
-  - Refuses to run unless HEAD equals the commit recorded in `plan.json` (a stale script is discarded and regenerated) and the working tree is clean, **except** when resuming a partial run of this same script (detected by `migration_in_progress` in the manifest and uncommitted changes only in paths listed in `plan.json`).
-  - Idempotent per object: skips objects already at the target `schema_version`.
+  - Refuses to run unless HEAD equals the commit recorded in `plan.json` (a stale script is discarded and regenerated) and the working tree is clean, **except** when resuming a partial run of this same script (detected by `migration_in_progress` in the manifest naming this script, and uncommitted changes only in paths listed in `plan.json`).
+  - Idempotent: each transform checks whether it is already applied and skips if so.
   - Touches only the paths listed in `plan.json`; verifies that before and after.
   - Supports a `--check` mode that prints the changes it would make and modifies nothing, so the user can see the diff without the agent.
   - Includes the migration doc's Verify checks as assertions and fails the run if any fails.
-  - Bumps each object's `schema_version` as it migrates it, and updates `manifest.yml` last, then creates the single migration commit (which includes the dry-run folder); never pushes.
+  - Sets `migration_in_progress` in `manifest.yml` first, clears it and sets `core_version` last, then creates the single migration commit (which includes the dry-run folder); never pushes.
   - Python 3 standard library only; no third-party imports. Run as `python3 -I migrate.py <repo-path>`.
 - **Report contents:**
   1. **Summary:** plain-language overview, counts (files touched, items changed, definitions changed), anything needing a user decision, and the **risk level**.
@@ -176,7 +155,7 @@ listing what needs human attention rather than guessing.
 1. ~~Check timing~~ — resolved: the check runs at session start but only **reports** that the repo is behind; applying a migration requires an explicit command.
 2. ~~Changelog~~ — resolved: **GitHub releases** are the changelog. Each release that bumps the core version should state the new core version and link the matching `migrations/<from>-to-<to>.md`. No separate CHANGELOG file.
 3. ~~Dry run~~ — resolved: yes, see Dry run below.
-4. ~~Item-level `schema_version`~~ — resolved: **yes**, every object carries `schema_version` so a partial migration can be detected and resumed (see Per-object schema version). Items do **not** record their implementation `version` (not every storage can hold extra fields); implementation schema changes find affected items by inspecting their fields. Because storage backends may not be able to hold `schema_version` either, see Storage without `schema_version` support.
+4. ~~Item-level `schema_version`~~ — resolved: **no**. Not every storage backend can persist per-object fields, so migration state is tracked at the repo level only (manifest) and recovery relies on idempotent scripts and git. Items do not record an implementation `version` either.
 
 5. ~~Script language~~ — resolved: **Python 3, standard library only**, run with `python3 -I`. Generated script is `migrate.py`.
 6. ~~Dry-run retention~~ — resolved: dry-run folders are **kept and committed** with the migration as an audit trail.
