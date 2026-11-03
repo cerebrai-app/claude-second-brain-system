@@ -142,7 +142,7 @@ Error (exit code non-zero **or** `ok: false`):
   store, and `describe` lists the variable names it needs (`requires_env`) so setup can check they exist.
 - **As Archive adapter:** a script adapter may be the Archive adapter only if its `describe` reports the Archive requirements below. It does not need a native "archive" concept; archived items are ordinary records it stores with `archive`/`archived_at` set. Backends with fixed schemas typically cannot meet the requirements and should not be chosen for the Archive.
 - **Id mapping:** since the plugin assigns `id`, a script for a backend with native ids must store the plugin `id` in the
-  backend (a custom field, label, or description marker) or, if the backend cannot hold it, in the **id index** (below), and
+  backend (a custom field, label, or description marker) or, if the backend cannot hold it, in the **id index** (below, kept in the brain repo), and
   return `ref` consistently. `describe` reports `native_ids: true` and how it maps.
 - **Timeouts and output limits** are enforced by the plugin; stderr is surfaced to the user on failure.
 - **Trust:** scripts execute on the user's machine with their privileges. They live in the user's brain repo and are the
@@ -151,20 +151,23 @@ Error (exit code non-zero **or** `ok: false`):
 - **Testing:** `list` and `read` are used by the migration sampler (doc 02), and an adapter must also be usable through a
   **fixture adapter** that serves a `sample.json` of envelopes, so a script's logic can be tested without the real system.
 
-## Id index (OS cache)
+## Id index (in the brain repo)
 
-For backends that cannot store the plugin `id`, the plugin keeps a JSON **id index** mapping `ref` to native id.
+For backends that cannot store the plugin `id`, the plugin keeps a JSON **id index** mapping `ref` to native id. It is
+**source-of-truth data, not a cache**.
 
-- **Location:** the user's OS cache directory, in a folder named for the vault: `<os-cache>/second-brain/<vault-name>/id-index/<adapter>.json`
-  (`$XDG_CACHE_HOME` or `~/.cache` on Linux, `~/Library/Caches` on macOS, `%LOCALAPPDATA%` on Windows).
-  `<vault-name>` is the `name` in `.brain/config.yml`, set at install.
-- It is **per user and per machine**, not in the brain repo, and not committed.
-- **Risk:** this index is the only place the mapping lives for such backends, so deleting the cache loses it. The plugin
-  must be able to **rebuild** it by `list`-ing the adapter and matching on a stable key the script defines (`describe` reports
-  `rebuild: "by_native_key"`, e.g. a title+created pair or a marker the script can search for), or else the adapter reports
-  `rebuild: "none"` and setup warns that the mapping is not recoverable. Adapters that can store the id in the backend avoid this.
-- **Migrations (doc 02):** the index is outside git, so it is not rolled back by `git restore`. The migration test run rebuilds
-  it in a scratch location, and a real run updates it only after the backend writes succeed.
+- **Location:** the brain repo working directory, one file per implementation, named by the implementation id:
+  `.brain/id-index/<impl-id>.json` (e.g. `.brain/id-index/linear-task.json`). **Committed to git** like any other data.
+- **Shape:** `{ "impl": "linear-task", "entries": { "task:01J...": { "native_id": "ENG-123" } } }`.
+- **Implementation ids must be unique across the vault** (not only within a core type), since the file is named by impl id alone.
+  Setup and validation reject a duplicate impl id.
+- **Written by the plugin**, never by the script adapter: the script returns the native id from `create`; the plugin records it
+  after a successful call and passes it back to the script in later requests (`args.native_id`).
+- **Recovery:** because it is in git, history is the backup. If an entry is lost, an adapter that can search by a stable key may
+  support `rebuild` (reported in `describe` as `rebuild: "by_native_key"`); otherwise `rebuild: "none"` and the git history is the only source.
+- **Migrations (doc 02):** the files are ordinary repo paths, so the migration script can list them in `plan.json`, transform
+  them, and git restores them on failure, with no special handling.
+- Adapters that can store the plugin `id` inside the backend need no index and have no file.
 
 ## Fixture adapter (test-only)
 
@@ -201,7 +204,7 @@ The adapter's `describe` reports `archive_adapter: true` only when it meets thes
 1. ~~Large lists~~ — resolved: **pagination** (always paged, cursor-based, `max_page` cap); no refs-only or projected items.
 2. ~~Local cache~~ — resolved: **deferred**, possibly adapter-specific. Before implementing, add a way to measure adapter latency (see Next steps).
 3. Remove it from the source binding (a permanent `delete` there is correct because the item now lives in the Archive).
-4. ~~Id mapping files~~ — resolved: a JSON **id index in the OS cache directory**, in a folder named for the vault (see Id index). Remaining: rebuild strategy per adapter.
+4. ~~Id mapping files~~ — resolved: a committed JSON **id index in the brain repo**, one file per implementation named by impl id, `.brain/id-index/<impl-id>.json` (see Id index). Impl ids must be vault-unique.
 
 `unarchive` is the mirror: create in the impl's binding, then delete from the Archive adapter. If the item's `impl` no longer exists,
 unarchive requires the user to pick a target implementation of the same type (the plugin converts the item per doc 01 triage rules).

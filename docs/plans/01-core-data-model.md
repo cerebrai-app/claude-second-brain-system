@@ -179,7 +179,7 @@ defaults:
 
 The plugin's setup flow runs at install and:
 
-1. Creates `second-brain/.brain/config.yml` (`version`, the vault `name` used for per-vault OS cache folders, the `archive` adapter choice, and the location of implementation definitions).
+1. Creates `second-brain/.brain/config.yml` (`version`, the vault `name`, the `archive` adapter choice, and the location of implementation definitions).
 2. Creates the system Archive (`archive:archive`) and the Inbox area item with `defaults` chosen by the user (or built-in starters).
 3. Scaffolds starter implementation definitions for any chosen implementation that does not exist yet.
 
