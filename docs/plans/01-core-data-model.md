@@ -17,6 +17,10 @@ The core provides contracts; implementations provide behavior.
 | Default storage | Markdown files with YAML frontmatter in the `second-brain` repo (git-versioned) |
 | Sort/filter language | **Natural language, interpreted by Claude.** Sorts and filters are plain-English descriptions; a formal expression language can be added later as an optimization. |
 | Default implementation | **Cascading overrides: Project → Area → Inbox.** The **Inbox is the default Area**: any item or Project with no explicit area belongs to it. The Inbox's defaults are the vault-wide defaults and are configured at plugin install. Areas and Projects may each override them. |
+| Cross-implementation relations | References are `<type>:<id>` and resolve across implementations; no implementation-specific syntax is needed. |
+| Ownership | **Core** types, contracts, built-in starters and migration instructions live in the plugin repo (`plugins/brain/`). **User-defined** implementations, config and data live in the user's brain repo (`second-brain`). |
+| Extensibility | All five core types (`Note`, `Task`, `Project`, `Area`, `Person`) are extensible. |
+| Versioning | Schema changes are handled by **migration instructions an agent follows**, driven by a **version manifest in the brain repo**. |
 | Inheritance | An implementation `extends` a **core type only**; no implementation-to-implementation inheritance. Shared behavior is reused by copying or by referencing named sorts/filters/actions, not by extending. |
 
 ## Concepts
@@ -107,11 +111,11 @@ implements the slot's contract (stdin/stdout JSON). Declarative is the default; 
 
 1. ~~Expression language~~ — resolved: natural language for now. Follow-ups: reproducibility across runs, cost at large vault sizes, and when to add a formal fallback.
 2. ~~Inheritance~~ — resolved: core type only (see Decisions).
-3. ~~Default implementation~~ — resolved: cascading Project → Area → Inbox (see Decisions and Default resolution). Project overrides are limited to types that live inside a Project (`task`, `note`). Follow-up: install flow details.
-4. Cross-implementation relations (a `linear-task` blocked by a `gtd-task`): is resolution via `<type>:<id>` enough?
-5. Where does the plugin's own code live vs. user definitions? Proposed: core contracts in `plugins/brain/`, user definitions in the `second-brain` repo.
-6. Schema evolution / migrations when an implementation changes fields.
-7. Should `Person`/`Area` be extensible at all, or fixed? (Proposed: all five extensible.)
+3. ~~Default implementation~~ — resolved: cascading Project → Area → Inbox (see Decisions and Default resolution). Project overrides are limited to types that live inside a Project (`task`, `note`); `person` is not considered to live inside a Project. Follow-up: install flow details.
+4. ~~Cross-implementation relations~~ — resolved: `<type>:<id>` is enough.
+5. ~~Code vs. user definitions~~ — resolved (see Ownership).
+6. ~~Schema evolution~~ — resolved in principle (see Versioning). Remaining: manifest format, migration doc format, how to handle user implementations that break on a core change.
+7. ~~Extensibility~~ — resolved: all five extensible.
 
 ## Default implementation resolution
 
@@ -167,8 +171,18 @@ The plugin's setup flow runs at install and:
 **Triage** later moves an item out of the Inbox by assigning it an Area and/or Project and, if the resolved default
 implementation differs, converting it (conversion mechanics TBD).
 
+## Versioning and migrations
+
+- The brain repo holds a **version manifest** (proposed: `.brain/manifest.yml`) recording the core model version it
+  conforms to, and the version of each user implementation definition.
+- The plugin repo ships **migration instructions** per core version step (proposed: `plugins/brain/migrations/<from>-to-<to>.md`),
+  written for an agent to follow: what changed, how to update implementation definitions and existing items, and how to verify.
+- On plugin update, a check compares the manifest to the plugin's core version. If behind, the agent walks the migration
+  chain in order, updates the manifest after each step, and commits per step so it is reviewable and revertible.
+- Open: manifest schema, per-implementation versioning rules, handling definitions that conflict with a core change.
+
 ## Next steps
 
-1. Resolve open questions 1–3.
+1. Specify the manifest and migration doc formats.
 2. Write per-slot contract specs (`02-storage-contract.md`, `03-sort-filter.md`, `04-automation.md`).
 3. Sketch the first built-in implementation of each core type as reference examples.
