@@ -310,8 +310,8 @@ away, or a bulk edit in a backend); prompting for every `claude` proposal in the
   events (`match` only, built-ins, hooks) and `when` conditions run **immediately** in the session. `surface` and `manual` runs are not deferred.
 - **Not deferred:** events from the user's own in-session actions (origin is the rule id chain, or none): the proposal is shown right away.
   `before_delete` rules are never queued (see above).
-- **Queue:** `.brain/automation/pending/<timestamp>-<impl-id>-<rule-id>.json` (git-ignored), containing the event (with its `external/<type>/<impl-id>`
-  origin) and the proposal if already computed. The `<impl-id>` comes from the event's origin; `<rule-id>` is the rule's id within that implementation.
+- **Queue:** `.brain/automation/pending/<timestamp>-<type>-<impl-id>-<rule-id>.json` (git-ignored), containing the event (with its `external/<type>/<impl-id>`
+  origin) and the proposal if already computed. The `<type>` and `<impl-id>` come from the event's origin; `<rule-id>` is the rule's id within that implementation.
 - **Review:** at session start the plugin reports "N pending approvals". `/brain pending` lists them (grouped by impl id) and lets the user approve,
   edit or reject each, or reject in bulk. Approval follows the normal flow (doc 05, `claude`): the exact operations are shown as diffs and applied
   deterministically.
