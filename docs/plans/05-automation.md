@@ -260,7 +260,7 @@ Items are also edited by hand (markdown files) or in a backend's own UI. The plu
 - **Validation:** an externally created or changed item is validated against its implementation schema first. If invalid, no rules run on it; it is
   reported to the user as invalid.
 - **First run:** with no seen state, the plugin builds the baseline silently (no `create` storm). Only changes after the baseline emit events.
-- **External backends** are bound by adapter rate limits and latency; the sync sub-agent throttles itself (below) and the cost is logged.
+- **External backends** are bound by their own rate limits and latency. The MVP sync sub-agent does not throttle itself (see Sync sub-agent); the cost is logged.
 - Automation does not run for an item whose adapter could not be reached; the failure is reported and the sync resumes next time.
 
 ### Sync sub-agent
@@ -271,21 +271,19 @@ Reconciliation runs in a dedicated **sub-agent** started at session start, in th
   seen state, and returns a **sync report** and an ordered **event list** to the main session. It does **not** run rules, apply operations,
   call hooks, or propose or apply `claude` actions. The main session dispatches the events afterward (deterministic rules immediately, `claude` proposals into the pending queue, see Pending approvals), so approvals, loop protection and
   logging behave as in the Execution model.
-- **Self rate limiting:** the sub-agent paces its own requests per adapter.
-  - Limits come from the adapter's `describe` (`rate_limit`: requests per second/minute, `max_concurrency`, `max_page`), overridable in
-    `.brain/config.yml` under `sync.rate_limits.<type>/<impl-id>`. Defaults are conservative (e.g. 2 requests/second, concurrency 1) for
-    `script` adapters; the local `markdown` adapter is not rate limited (it only reads local files).
-  - Implemented as a token bucket per adapter. On `rate_limited` or `unavailable` errors it honors any `retry_after` and otherwise backs off
-    exponentially with jitter, up to a bounded number of retries, then gives up on that binding for this run and records it as incomplete.
-  - Adapters are scanned **in parallel with each other** but each adapter serially, so one slow backend does not block the rest.
+- **No rate limiting in the MVP** *(Decided)*: the sub-agent does not pace, throttle or back off. Adapters are scanned **in parallel with each other**
+  but each adapter serially, so one slow backend does not block the rest. If an adapter returns `rate_limited` or `unavailable` (doc 03), the
+  sub-agent stops that binding for this run, records it as incomplete in the sync report and resumes from its checkpoint next time (below).
+  The run budget (below) still bounds total cost. *Post-MVP:* per-adapter self rate limiting (limits from `describe`, overridable in
+  `.brain/config.yml`; a token bucket; honoring `retry_after` with backoff and jitter) can be added without changing the sync report or checkpoints.
 - **Budget and resumability:** each run has a budget (wall-clock and request count, set in `sync.budget`). Each binding keeps a checkpoint (`cursor`
   and the high-water `updated_since` mark) in the seen state, so a run that hits its budget or is interrupted resumes from the checkpoint next
   time instead of rescanning. Bindings are visited **least recently synced first** so none starve.
-- **Reporting:** the sub-agent streams progress ("synced 4 of 6 bindings; linear-task incomplete: rate limited") and ends with the report. The
+- **Reporting:** the sub-agent streams progress ("synced 4 of 6 bindings; linear-task incomplete: rate_limited") and ends with the report. The
   main session may start dispatching events for completed bindings before the whole sync finishes.
 - **Consistency:** the seen state is only advanced for items whose events have been **handed to** the main session; if the session ends before
   dispatch, those items are re-detected next time (events are keyed by `(ref, revision)` so they dispatch once).
-- Logged timings (per binding: duration, requests, retries, pages) feed the latency measurement in doc 03.
+- Logged timings (per binding: duration, requests, pages) feed the latency measurement in doc 03.
 
 ## Scheduling (post-MVP)
 
@@ -347,7 +345,7 @@ Pending approval files reference rule ids and are discarded (with a note) if the
 5. ~~Condition language~~ — resolved: **`match` (structural) and `when` (natural language) are sufficient.**
 6. ~~`surface` destinations~~ — resolved: results can be **bound with `as:` and used as input to later actions**, e.g. writing a task list into a daily journal note via `write_body`. (Was: where reports go beyond the session.)
 7. ~~Cross-item and cross-implementation rules~~ — resolved: **event rules stay per-implementation** (a rule on `task` cannot react to a `project` change; model it as a rule on the project that edits its tasks). **Cross-implementation `schedule`/`manual` rules are allowed at the vault level** with a mandatory `requires` list (see Vault-level automation).
-8. ~~Session-start cost~~ — resolved for sync: a **self-rate-limiting sync sub-agent** (see Sync sub-agent). Remaining: defaults for `sync.budget`. The "which `schedule` rules are due" question moves with scheduling to post-MVP.
+8. ~~Session-start cost~~ — resolved for sync: a **background sync sub-agent** with a run budget and resumable checkpoints (see Sync sub-agent); **self rate limiting is post-MVP**. Remaining: defaults for `sync.budget`. The "which `schedule` rules are due" question moves with scheduling to post-MVP.
 
 ## Next steps
 
