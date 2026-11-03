@@ -352,6 +352,9 @@ Pending approval files reference rule ids and are discarded (with a note) if the
 
 ## Next steps
 
-1. Resolve the open questions above.
-2. Write `04-sort-filter.md` (how Claude is invoked for sorts/filters, reproducibility), which `when` and `surface` rely on.
-3. Specify the install flow and triage mechanics.
+1. Write the install flow and triage mechanics doc (not yet written). Pending approvals, the `capture` trigger and Inbox triage depend on it.
+2. Follow-ups in other docs:
+   - Doc 01: mention the vault-level `.brain/automation.yml` as a vault config file, and the `write_body` / `before_delete` additions where automation is summarized.
+   - Doc 03: note that the plugin's permanent-delete flow runs the `before_delete` rules after the user confirmation and before the adapter `delete` call.
+3. Decide whether doc 05 moves from **Draft** to reviewed now that its open questions are resolved.
+4. Post-MVP, deliberately deferred here: `schedule` triggers and catch-up, non-interactive runs (cron, `run-due`) feeding the pending queue, sync self rate limiting, a sync run budget, and vault-level event triggers.
