@@ -114,7 +114,7 @@ implements the slot's contract (stdin/stdout JSON). Declarative is the default; 
 3. ~~Default implementation~~ — resolved: cascading Project → Area → Inbox (see Decisions and Default resolution). Project overrides are limited to types that live inside a Project (`task`, `note`); `person` is not considered to live inside a Project. Follow-up: install flow details.
 4. ~~Cross-implementation relations~~ — resolved: `<type>:<id>` is enough.
 5. ~~Code vs. user definitions~~ — resolved (see Ownership).
-6. ~~Schema evolution~~ — resolved in principle (see Versioning). Remaining: manifest format, migration doc format, how to handle user implementations that break on a core change.
+6. ~~Schema evolution~~ — resolved in principle (see Versioning). Specified in doc 02.
 7. ~~Extensibility~~ — resolved: all five extensible.
 
 ## Default implementation resolution
@@ -179,10 +179,10 @@ implementation differs, converting it (conversion mechanics TBD).
   written for an agent to follow: what changed, how to update implementation definitions and existing items, and how to verify.
 - On plugin update, a check compares the manifest to the plugin's core version. If behind, the agent walks the migration
   chain in order, updates the manifest after each step, and commits per step so it is reviewable and revertible.
-- Open: manifest schema, per-implementation versioning rules, handling definitions that conflict with a core change.
+- Formats, flow and conflict handling are specified in [02 — Versioning and Migrations](02-versioning-and-migrations.md).
 
 ## Next steps
 
-1. Specify the manifest and migration doc formats.
+1. ~~Specify the manifest and migration doc formats~~ — drafted in doc 02.
 2. Write per-slot contract specs (`02-storage-contract.md`, `03-sort-filter.md`, `04-automation.md`).
 3. Sketch the first built-in implementation of each core type as reference examples.
