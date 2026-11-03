@@ -26,6 +26,7 @@ Linear, Trello, ...) without the rest of the system caring. The contract is the 
   "body": "Free-form markdown.",
   "created": "2026-11-03T10:00:00Z",
   "updated": "2026-11-03T10:00:00Z",
+  "archived": null,
   "revision": "opaque-string"
 }
 ```
@@ -34,6 +35,7 @@ Linear, Trello, ...) without the rest of the system caring. The contract is the 
   Backends with their own native ids store the native id privately (see `native_id`) and map it to the `id`.
 - `relations` always hold refs (`<type>:<id>`), never native ids or paths.
 - `revision` is opaque, backend-defined (git blob hash, `updated` timestamp, ETag) and used for optimistic concurrency.
+- `archived` is `null` for live items, or an ISO timestamp for archived ones. It is set only by `archive`/`unarchive`, never by `update`.
 - Unknown `fields` are preserved on round trip.
 
 ## Operations
@@ -45,8 +47,10 @@ Every adapter implements these. All take and return envelopes; all are scoped to
 | `create` | envelope without `ref`/`revision`/timestamps (plus a plugin-assigned `id`) | envelope | Fails with `conflict` if `id` exists. |
 | `read` | `ref` | envelope | `not_found` if missing. |
 | `update` | envelope with the `revision` it was read at | envelope | `conflict` if the stored revision differs. Full replace of `fields`/`relations`/`body`. |
-| `delete` | `ref`, `revision` | `{ok: true}` | Default semantics are adapter-defined (hard delete, or archive); see `capabilities.delete`. |
-| `list` | `query` (below), `limit`, `cursor` | `{items: [envelope], cursor}` | Paged. Returns envelopes, not just refs. |
+| `archive` | `ref`, `revision` | envelope | **The default way to remove an item.** Sets `archived`; the item stays retrievable by `read` and `resolve`. Idempotent. |
+| `unarchive` | `ref`, `revision` | envelope | Reverses `archive`. |
+| `delete` | `ref`, `revision`, `confirm: "permanent"` | `{ok: true}` | **Exception case:** permanent removal. Requires the explicit `confirm` literal; `unsupported` if the adapter has no hard delete. |
+| `list` | `query` (below), `limit`, `cursor` | `{items: [envelope], cursor}` | Paged. Returns envelopes, not just refs. Excludes archived items unless the query sets `include_archived` (or `archived_only`). |
 | `resolve` | `ref` | `{binding, found: bool}` | Cheap existence check, used for cross-adapter reference validation. |
 | `describe` | none | capabilities and settings schema | Static; used at install/setup and by the dry-run sampler. |
 
@@ -57,7 +61,8 @@ Claude reads less:
 
 ```json
 { "types": ["task"], "impls": ["gtd-task"], "fields_eq": { "status": "open" },
-  "relations_include": { "belongs_to": "project:01J..." }, "updated_since": "2026-11-01T00:00:00Z" }
+  "relations_include": { "belongs_to": "project:01J..." }, "updated_since": "2026-11-01T00:00:00Z",
+  "include_archived": false }
 ```
 
 All keys optional, all combined with AND. Adapters apply as much as they can natively and **declare which keys they honor**
@@ -69,8 +74,9 @@ All keys optional, all combined with AND. Adapters apply as much as they can nat
 {
   "adapter": "markdown",
   "capabilities": {
-    "query": ["types", "impls", "fields_eq", "relations_include", "updated_since"],
-    "delete": "hard",
+    "query": ["types", "impls", "fields_eq", "relations_include", "updated_since", "include_archived"],
+    "archive": true,
+    "hard_delete": true,
     "native_ids": false,
     "transactions": false,
     "supports_body": true,
@@ -93,7 +99,8 @@ The plugin adapts to capabilities (e.g. refuses to bind an implementation with `
   index (`.brain/index/refs.json`, git-ignored, rebuildable by scanning frontmatter `id`s) and falls back to a scan on miss.
 - **Revision:** git blob hash of the file's content as read (or content hash if not in a git repo).
 - **Atomic writes:** write temp file in the same directory, then rename. No partial files on crash.
-- **Delete:** `hard` by default; an optional binding setting `archive_path` moves instead.
+- **Archive:** moves the file to the binding's `archive_path` (default `archive/{type}/{impl}/{id}.md`) and sets `archived` in frontmatter. `unarchive` moves it back to the rendered live path. The id → path index covers archived files, so `read`/`resolve` still work.
+- **Delete:** permanently removes the file. Only on explicit `confirm: "permanent"`; git history still holds prior content, but the adapter does not rely on that.
 - Preserves unknown frontmatter keys and key order on round trip.
 - Git commits are **not** made by the adapter. Committing is the caller's concern (e.g. a skill or automation).
 
@@ -132,6 +139,7 @@ Error (exit code non-zero **or** `ok: false`):
   `retryable: true` is advisory; the caller retries at most with bounded backoff.
 - **Credentials:** never in request JSON or the repo. The script reads them from environment variables or the user's secret
   store, and `describe` lists the variable names it needs (`requires_env`) so setup can check they exist.
+- **Archive mapping:** the script maps `archive` to the backend's native concept (Linear archive, Trello archived card, a status/label otherwise) and reports it via `describe`. If the backend has none, `archive: false` and the plugin falls back to a label/marker field or refuses the binding; `delete` is never used as a substitute for `archive`.
 - **Id mapping:** since the plugin assigns `id`, a script for a backend with native ids must store the plugin `id` in the
   backend (a custom field, label, or description marker) or in a mapping file under `.brain/adapters/<name>.map.json`, and
   return `ref` consistently. `describe` reports `native_ids: true` and how it maps.
@@ -155,10 +163,12 @@ selectable in a real binding.
   binding for the session.
 - An `id` is unique across the whole vault, not per adapter. `create` checks `resolve` on all bindings of that type first
   when `capabilities` do not guarantee uniqueness (ULIDs make collision practically impossible, so this is a safety net).
+- `resolve` finds archived items too and reports `archived: true`; a relation to an archived item is **not** dangling, but validation surfaces it as a warning.
 - If a ref resolves nowhere, it is a **dangling reference**: reported by a validation pass, never silently dropped.
 - Moving an item between implementations (triage, doc 01) is `create` in the target binding with the **same id**, then `delete`
-  in the source, so existing refs stay valid. It is not atomic across adapters; the plugin does create-then-delete and reports
-  if the delete fails (the item then exists twice, and `resolve` order picks the one in the default binding).
+  in the source (a permanent delete is correct here: the item lives on under the same id, so archiving would leave a duplicate
+  id), so existing refs stay valid. This is one of the few sanctioned uses of `delete`. It is not atomic across adapters; the plugin
+  does create-then-delete and reports if the delete fails (the item then exists twice, and `resolve` order picks the one in the default binding).
 
 ## Concurrency and consistency
 
@@ -178,7 +188,7 @@ errors above.
 
 1. `list` returns full envelopes; for very large external systems should there be a refs-only mode? (Leaning: add `fields_only: [..]` projection later, not now.)
 2. Should the plugin keep a local cache/index of external items for fast sort/filter, with a sync operation? (Leaning: defer until we measure cost.)
-3. Does `delete` need a required `soft`/`hard` semantics flag exposed to callers, or stay adapter-defined?
+3. ~~Delete semantics~~ — resolved: **archive is the default**, permanent `delete` is the exception (explicit `confirm`). Remaining: should the plugin itself require user confirmation before any permanent delete (leaning yes, except triage moves), and should archived items ever be purged automatically (leaning no)?
 4. Where do script adapters' id mapping files live if the backend cannot store the plugin `id`, and how are they migrated (doc 02)?
 5. Is one process per operation too slow for large lists? A batch op (`read_many`) may be needed.
 6. Binary attachments: out of scope for v1, or `attachments` capability?
