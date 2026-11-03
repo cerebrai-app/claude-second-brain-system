@@ -70,39 +70,52 @@ How to revert (normally `git revert` of the step's commit).
 
 ## Migration flow
 
-1. **Detect.** At session start (or via an explicit command), compare `manifest.core_version` to the plugin's core version.
-   Equal → done. Repo ahead of plugin → stop and tell the user to update the plugin. Behind → continue.
-2. **Plan and dry run.** List the chain `N-to-N+1 ... M-1-to-M`, show the user the summaries, and note any `breaking: true` steps.
+The agent is involved only in **planning**. The **apply** phase is a generated script run as-is; no agent reasoning,
+interpretation or improvisation happens while changes are made.
+
+1. **Detect.** At session start, compare `manifest.core_version` to the plugin's core version and **report** if behind
+   (no action). Equal → done. Repo ahead of plugin → tell the user to update the plugin.
+2. **Plan.** On explicit command, list the chain `N-to-N+1 ... M-1-to-M`, show the summaries, and note any `breaking: true` steps.
 3. **Preflight.** Require a clean git working tree in the brain repo; otherwise stop.
-4. **Confirm, then apply per step.** After the dry run summary is approved, follow the doc's Steps, resolve Judgement calls (asking the user where specified), run Verify.
-5. **Record.** Update `core_version` and append to `migrations` in the manifest.
-6. **Commit per step** (`migrate: core 1 -> 2`) so each is reviewable and revertible. Do not push without the user's say-so.
-7. **Failure.** If Verify fails, stop, leave the working tree uncommitted for that step, and report. The user can discard with git.
+4. **Dry run (agent).** For one step at a time, the agent reads the migration doc, inspects the brain repo, resolves all
+   judgement calls (asking the user), and **generates a migration script** plus a dry-run report (see below).
+   Nothing in the brain repo is modified. The agent may test the script against a scratch copy of the repo.
+5. **Review and confirm.** The user reads the summary, risk level and script, and approves.
+6. **Apply (script, no agent).** The user (or the agent acting only as a launcher) runs the script exactly as saved.
+   The script is deterministic, takes the repo path as an argument, performs the changes, runs its own verification,
+   updates the manifest, and commits `migrate: core N -> N+1`. It never pushes.
+7. **Failure.** If any check fails, the script restores the paths it touched to their pre-run state, aborts without
+   committing, and exits non-zero with a message. It never attempts repair.
 
-## Dry run
+## Dry run and generated migration script
 
-Before applying a migration, the agent produces a dry run: it follows the migration doc's Steps **without modifying any
-item or definition**, and records what it would do.
+The dry run produces **code**, not just a description. Its outputs live in `.brain/migrations/dry-runs/<from>-to-<to>-<timestamp>/`:
 
-- **Output file:** `.brain/migrations/dry-runs/<from>-to-<to>-<timestamp>.md` in the brain repo. It is written only
-  into that directory and is not part of the migration commit unless the user chooses to keep it.
-- **Contents:**
-  1. **Summary** (top of file): plain-language overview of what will change, counts (files touched, items changed,
-     definitions changed), anything that needs a user decision, and the **risk level**.
-  2. **Risk level:** `low` | `medium` | `high`, with a one-to-three-line justification.
-  3. **Planned changes:** per file, the proposed diff (or a description for large mechanical changes).
-  4. **Judgement calls:** each decision the agent would need, with its proposed answer.
-  5. **Unhandled items:** things flagged for human attention (e.g. script adapters, hooks).
-- **Risk rubric:**
+| File | Purpose |
+|---|---|
+| `report.md` | Summary (top), risk level with justification, planned changes, decisions made, unhandled items. |
+| `migrate.<ext>` | The script the apply phase runs as-is. |
+| `plan.json` | Machine-readable list of files the script will touch and the brain repo HEAD commit it was generated against. |
+
+- **Script requirements:**
+  - Deterministic and self-contained; all judgement calls from the migration doc are **already resolved and baked in** by the dry run. The script asks no questions.
+  - Refuses to run unless the working tree is clean and HEAD equals the commit recorded in `plan.json` (a stale script is discarded and regenerated).
+  - Touches only the paths listed in `plan.json`; verifies that before and after.
+  - Supports a `--check` mode that prints the changes it would make and modifies nothing, so the user can see the diff without the agent.
+  - Includes the migration doc's Verify checks as assertions and fails the run if any fails.
+  - Updates `manifest.yml` and creates the single migration commit; never pushes.
+- **Report contents:**
+  1. **Summary:** plain-language overview, counts (files touched, items changed, definitions changed), anything needing a user decision, and the **risk level**.
+  2. **Risk level:** `low` | `medium` | `high` with a one-to-three-line justification.
+  3. **Planned changes:** per file diff or description for large mechanical changes.
+  4. **Decisions made:** each judgement call and the answer baked into the script.
+  5. **Unhandled items:** things the script deliberately does not touch (e.g. script adapters, hooks), flagged for human attention.
+- **Risk rubric** (highest level any single factor reaches):
   - `low`: purely mechanical, fully reversible via git, no judgement calls, no unhandled items.
-  - `medium`: judgement calls with clear defaults, or changes to many items, or the doc is marked `breaking: true`.
-  - `high`: data could be lost or become ambiguous (dropped fields, lossy type changes), unhandled script
-    adapters/hooks, external storage adapters affected, or any verify step that cannot be fully automated.
-  The agent takes the highest level any single factor reaches.
-- **Gate:** after the dry run the agent shows the summary and risk level and asks the user to proceed. `high` requires an
-  explicit confirmation naming the risk. Applying a migration without a prior dry run for that exact step is not allowed.
-- **Staleness:** a dry run records the brain repo's HEAD commit; if HEAD differs when applying, the dry run is
-  discarded and regenerated.
+  - `medium`: judgement calls with clear defaults, many items changed, or the doc is marked `breaking: true`.
+  - `high`: data could be lost or become ambiguous (dropped fields, lossy type changes), unhandled script adapters/hooks, external storage adapters affected, or a verify step that cannot be fully automated.
+- **Gate:** a step cannot be applied without a dry run for that exact step. `high` requires an explicit confirmation naming the risk.
+- **Rollback:** `git revert` of the migration commit; the script also backs out its own changes on failure (flow step 7).
 
 ## User implementations that conflict with a core change
 
@@ -123,6 +136,9 @@ listing what needs human attention rather than guessing.
 2. ~~Changelog~~ — resolved: **GitHub releases** are the changelog. Each release that bumps the core version should state the new core version and link the matching `migrations/<from>-to-<to>.md`. No separate CHANGELOG file.
 3. ~~Dry run~~ — resolved: yes, see Dry run below.
 4. Item-level `schema_version` in frontmatter, or rely solely on implementation `version` plus the manifest? (Leaning no: avoids touching every file.)
+
+5. Script language for generated migrations. Leaning Python 3 standard library only, run with `python3 -I`: ubiquitous and good at structured frontmatter edits. Alternative: POSIX shell plus `git` (fewer deps, poor for frontmatter).
+6. Keep dry-run folders in the repo as an audit trail, or `.gitignore` them? Leaning commit them with the migration.
 
 ## Next steps
 
