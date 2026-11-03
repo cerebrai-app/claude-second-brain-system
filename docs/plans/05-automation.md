@@ -254,8 +254,8 @@ Items are also edited by hand (markdown files) or in a backend's own UI. The plu
   - relation added/removed → also emit `relation` events.
   - ref in seen state but not found by `read`/`resolve` anywhere (including the Archive) → **not** an event; recorded as a *missing item* in the
     sync report (permanent delete is not a trigger, and validation reports dangling references per doc 03).
-- **Event marking:** reconciled events carry `origin: external:<impl-id>` (the id of the implementation whose binding the change was detected on,
-  e.g. `external:task`) and `detected_at`; they have `depth: 0`, so rules triggered by them run normally. The `external:` prefix is what marks an
+- **Event marking:** reconciled events carry `origin: external/<type>/<impl-id>` (the core type and implementation id of the binding the change was detected on,
+  e.g. `external/task/my-task-impl`) and `detected_at`; they have `depth: 0`, so rules triggered by them run normally. The leading `external/` segment is what marks an
   event as sync-detected (see Pending approvals). The body of the payload says `before` is a snapshot (fields/relations only).
 - **Validation:** an externally created or changed item is validated against its implementation schema first. If invalid, no rules run on it; it is
   reported to the user as invalid.
@@ -306,12 +306,12 @@ Claude Code plugins have no always-on process, so schedules cannot fire on their
 The pending queue is **in the MVP**, as **deferred approvals** rather than unattended runs. Sync can detect many external changes at once (after days
 away, or a bulk edit in a backend); prompting for every `claude` proposal in the middle of a session would be disruptive, so those wait for the user.
 
-- **What is deferred:** `claude` actions triggered by events whose `origin` starts with `external:` (sync-detected). Deterministic rules on the same
+- **What is deferred:** `claude` actions triggered by events whose `origin` starts with `external/` (sync-detected). Deterministic rules on the same
   events (`match` only, built-ins, hooks) and `when` conditions run **immediately** in the session. `surface` and `manual` runs are not deferred.
 - **Not deferred:** events from the user's own in-session actions (origin is the rule id chain, or none): the proposal is shown right away.
   `before_delete` rules are never queued (see above).
-- **Queue:** `.brain/automation/pending/<timestamp>-<impl-id>-<rule-id>.json` (git-ignored), containing the event (with its `external:<impl-id>`
-  origin) and the proposal if already computed. The impl id comes from the event's origin; `<rule-id>` is the rule's id within that implementation.
+- **Queue:** `.brain/automation/pending/<timestamp>-<impl-id>-<rule-id>.json` (git-ignored), containing the event (with its `external/<type>/<impl-id>`
+  origin) and the proposal if already computed. The `<impl-id>` comes from the event's origin; `<rule-id>` is the rule's id within that implementation.
 - **Review:** at session start the plugin reports "N pending approvals". `/brain pending` lists them (grouped by impl id) and lets the user approve,
   edit or reject each, or reject in bulk. Approval follows the normal flow (doc 05, `claude`): the exact operations are shown as diffs and applied
   deterministically.
