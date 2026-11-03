@@ -74,7 +74,7 @@ How to revert (normally `git revert` of the step's commit).
    Equal → done. Repo ahead of plugin → stop and tell the user to update the plugin. Behind → continue.
 2. **Plan and dry run.** List the chain `N-to-N+1 ... M-1-to-M`, show the user the summaries, and note any `breaking: true` steps.
 3. **Preflight.** Require a clean git working tree in the brain repo; otherwise stop.
-4. **Confirm, then apply per step.** After the dry run summary is approved, Follow the doc's Steps, resolve Judgement calls (asking the user where specified), run Verify.
+4. **Confirm, then apply per step.** After the dry run summary is approved, follow the doc's Steps, resolve Judgement calls (asking the user where specified), run Verify.
 5. **Record.** Update `core_version` and append to `migrations` in the manifest.
 6. **Commit per step** (`migrate: core 1 -> 2`) so each is reviewable and revertible. Do not push without the user's say-so.
 7. **Failure.** If Verify fails, stop, leave the working tree uncommitted for that step, and report. The user can discard with git.
