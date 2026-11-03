@@ -26,7 +26,8 @@ Linear, Trello, ...) without the rest of the system caring. The contract is the 
   "body": "Free-form markdown.",
   "created": "2026-11-03T10:00:00Z",
   "updated": "2026-11-03T10:00:00Z",
-  "archived": null,
+  "archive": null,
+  "archived_at": null,
   "revision": "opaque-string"
 }
 ```
@@ -35,7 +36,7 @@ Linear, Trello, ...) without the rest of the system caring. The contract is the 
   Backends with their own native ids store the native id privately (see `native_id`) and map it to the `id`.
 - `relations` always hold refs (`<type>:<id>`), never native ids or paths.
 - `revision` is opaque, backend-defined (git blob hash, `updated` timestamp, ETag) and used for optimistic concurrency.
-- `archived` is `null` for live items, or an ISO timestamp for archived ones. It is set only by `archive`/`unarchive`, never by `update`.
+- `archive` is `null` for live items, or the ref of the Archive that contains the item (`archive:main`); `archived_at` is the timestamp. Both are set only by `archive`/`unarchive`, never by `update`. The `Archive` core type itself (doc 01) is not extensible and is always stored by the built-in `markdown` adapter; only the *items inside it* use their own implementation's storage binding.
 - Unknown `fields` are preserved on round trip.
 
 ## Operations
@@ -47,10 +48,10 @@ Every adapter implements these. All take and return envelopes; all are scoped to
 | `create` | envelope without `ref`/`revision`/timestamps (plus a plugin-assigned `id`) | envelope | Fails with `conflict` if `id` exists. |
 | `read` | `ref` | envelope | `not_found` if missing. |
 | `update` | envelope with the `revision` it was read at | envelope | `conflict` if the stored revision differs. Full replace of `fields`/`relations`/`body`. |
-| `archive` | `ref`, `revision` | envelope | **The default way to remove an item.** Sets `archived`; the item stays retrievable by `read` and `resolve`. Idempotent. |
-| `unarchive` | `ref`, `revision` | envelope | Reverses `archive`. |
+| `archive` | `ref`, `revision`, `archive` (Archive ref, default `archive:main`) | envelope | **The default way to remove an item.** Moves it into the Archive container (type, impl, id unchanged); it stays retrievable by `read` and `resolve`. Idempotent. Not valid for `archive` items. |
+| `unarchive` | `ref`, `revision` | envelope | Reverses `archive`; the item returns to the live vault. |
 | `delete` | `ref`, `revision`, `confirm: "permanent"` | `{ok: true}` | **Exception case:** permanent removal. Requires the explicit `confirm` literal; `unsupported` if the adapter has no hard delete. |
-| `list` | `query` (below), `limit`, `cursor` | `{items: [envelope], cursor}` | Paged. Returns envelopes, not just refs. Excludes archived items unless the query sets `include_archived` (or `archived_only`). |
+| `list` | `query` (below), `limit`, `cursor` | `{items: [envelope], cursor}` | Paged. Returns envelopes, not just refs. Excludes archived items unless the query sets `include_archived` (or `archived_only`, optionally narrowed with `archive: "archive:main"`). |
 | `resolve` | `ref` | `{binding, found: bool}` | Cheap existence check, used for cross-adapter reference validation. |
 | `describe` | none | capabilities and settings schema | Static; used at install/setup and by the dry-run sampler. |
 
@@ -99,7 +100,7 @@ The plugin adapts to capabilities (e.g. refuses to bind an implementation with `
   index (`.brain/index/refs.json`, git-ignored, rebuildable by scanning frontmatter `id`s) and falls back to a scan on miss.
 - **Revision:** git blob hash of the file's content as read (or content hash if not in a git repo).
 - **Atomic writes:** write temp file in the same directory, then rename. No partial files on crash.
-- **Archive:** moves the file to the binding's `archive_path` (default `archive/{type}/{impl}/{id}.md`) and sets `archived` in frontmatter. `unarchive` moves it back to the rendered live path. The id → path index covers archived files, so `read`/`resolve` still work.
+- **Archive:** moves the file to the binding's `archive_path` (default `archive/{type}/{impl}/{id}.md`) and sets `archive`/`archived_at` in frontmatter. `unarchive` moves it back to the rendered live path. The id → path index covers archived files, so `read`/`resolve` still work.
 - **Delete:** permanently removes the file. Only on explicit `confirm: "permanent"`; git history still holds prior content, but the adapter does not rely on that.
 - Preserves unknown frontmatter keys and key order on round trip.
 - Git commits are **not** made by the adapter. Committing is the caller's concern (e.g. a skill or automation).
@@ -163,7 +164,7 @@ selectable in a real binding.
   binding for the session.
 - An `id` is unique across the whole vault, not per adapter. `create` checks `resolve` on all bindings of that type first
   when `capabilities` do not guarantee uniqueness (ULIDs make collision practically impossible, so this is a safety net).
-- `resolve` finds archived items too and reports `archived: true`; a relation to an archived item is **not** dangling, but validation surfaces it as a warning.
+- `resolve` finds archived items too and reports the item's `archive` (non-null when archived); a relation to an archived item is **not** dangling, but validation surfaces it as a warning.
 - If a ref resolves nowhere, it is a **dangling reference**: reported by a validation pass, never silently dropped.
 - Moving an item between implementations (triage, doc 01) is `create` in the target binding with the **same id**, then `delete`
   in the source (a permanent delete is correct here: the item lives on under the same id, so archiving would leave a duplicate
@@ -188,10 +189,13 @@ errors above.
 
 1. `list` returns full envelopes; for very large external systems should there be a refs-only mode? (Leaning: add `fields_only: [..]` projection later, not now.)
 2. Should the plugin keep a local cache/index of external items for fast sort/filter, with a sync operation? (Leaning: defer until we measure cost.)
-3. ~~Delete semantics~~ — resolved: **archive is the default**, permanent `delete` is the exception (explicit `confirm`). Remaining: should the plugin itself require user confirmation before any permanent delete (leaning yes, except triage moves), and should archived items ever be purged automatically (leaning no)?
+3. ~~Delete semantics~~ (Archive is now a core type, see doc 01) — resolved: **archive is the default**, permanent `delete` is the exception (explicit `confirm`). Remaining: should the plugin itself require user confirmation before any permanent delete (leaning yes, except triage moves), and should archived items ever be purged automatically (leaning no)?
 4. Where do script adapters' id mapping files live if the backend cannot store the plugin `id`, and how are they migrated (doc 02)?
 5. Is one process per operation too slow for large lists? A batch op (`read_many`) may be needed.
 6. Binary attachments: out of scope for v1, or `attachments` capability?
+
+7. Can there be more than one Archive (e.g. per Area or per year), or exactly one `archive:main`? (Leaning one for now.)
+8. When an Area or Project is archived, do its contained items archive with it (cascade), stay live, or require a choice? (Leaning ask, default cascade.)
 
 ## Next steps
 

@@ -19,7 +19,8 @@ The core provides contracts; implementations provide behavior.
 | Default implementation | **Cascading overrides: Project → Area → Inbox.** The **Inbox is the default Area**: any item or Project with no explicit area belongs to it. The Inbox's defaults are the vault-wide defaults and are configured at plugin install. Areas and Projects may each override them. |
 | Cross-implementation relations | References are `<type>:<id>` and resolve across implementations; no implementation-specific syntax is needed. |
 | Ownership | **Core** types, contracts, built-in starters and migration instructions live in the plugin repo (`plugins/brain/`). **User-defined** implementations, config and data live in the user's brain repo (`second-brain`). |
-| Extensibility | All five core types (`Note`, `Task`, `Project`, `Area`, `Person`) are extensible. |
+| Extensibility | Five core types (`Note`, `Task`, `Project`, `Area`, `Person`) are extensible. **`Archive` is a sixth core type that is not extensible**: no user implementations, one built-in definition. |
+| Archive | `Archive` is a container core type that can hold objects of **every other type** (the same objects as the vault, keeping their `ref`, `type` and `impl`). Archiving an item moves it into the Archive; it is the default way to remove an item (permanent delete is the exception). See Archive below and doc 03. |
 | Versioning | Schema changes are handled by **migration instructions an agent follows**, driven by a **version manifest in the brain repo**. |
 | Inheritance | An implementation `extends` a **core type only**; no implementation-to-implementation inheritance. Shared behavior is reused by copying or by referencing named sorts/filters/actions, not by extending. |
 
@@ -46,7 +47,20 @@ The core provides contracts; implementations provide behavior.
 | `Area` | Ongoing responsibility, no end date | `title` | `parent` → Area |
 | `Person` | Someone you interact with | `name` | `related_to` → Person |
 
-Core fields are deliberately minimal; implementations add the rest.
+| `Archive` | Holds retired objects of any type | `title` | `contains` → any item except Archive |
+
+Core fields are deliberately minimal; implementations add the rest. **`Archive` is the exception: it cannot be extended.**
+
+### Archive
+
+- A container, like an Area, but for retired objects. It accepts items of all five extensible types, keeping their `ref`
+  (`<type>:<id>`), `type`, `impl`, fields and relations unchanged, so existing references still resolve.
+- **Not extensible:** no implementations, no custom schema, storage, sort, filter or automation slots, and no `defaults`.
+  Its behavior is fixed by the plugin (browsing, restoring, listing), so every vault's Archive works the same way.
+- An Archive cannot contain an Archive, and cannot itself be archived or deleted.
+- The vault has one system Archive, `archive:main`, created at install (like the Inbox area). Whether more than one is allowed is open.
+- An archived item still follows its own implementation's schema and storage binding; only its membership changes.
+  Restoring returns it to the live vault (to its previous Area/Project when those still exist).
 
 ## Item shape (markdown + frontmatter)
 
@@ -115,7 +129,7 @@ implements the slot's contract (stdin/stdout JSON). Declarative is the default; 
 4. ~~Cross-implementation relations~~ — resolved: `<type>:<id>` is enough.
 5. ~~Code vs. user definitions~~ — resolved (see Ownership).
 6. ~~Schema evolution~~ — resolved in principle (see Versioning). Specified in doc 02.
-7. ~~Extensibility~~ — resolved: all five extensible.
+7. ~~Extensibility~~ — resolved: all five original types extensible; `Archive` is a non-extensible sixth type.
 
 ## Default implementation resolution
 
@@ -165,7 +179,7 @@ defaults:
 The plugin's setup flow runs at install and:
 
 1. Creates `second-brain/.brain/config.yml` (`version`, and the location of implementation definitions).
-2. Creates the Inbox area item with `defaults` chosen by the user (or built-in starters).
+2. Creates the system Archive (`archive:main`) and the Inbox area item with `defaults` chosen by the user (or built-in starters).
 3. Scaffolds starter implementation definitions for any chosen implementation that does not exist yet.
 
 **Triage** later moves an item out of the Inbox by assigning it an Area and/or Project and, if the resolved default
