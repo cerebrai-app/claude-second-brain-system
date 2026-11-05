@@ -45,7 +45,7 @@ The core provides contracts; implementations provide behavior.
 | `Task` | Actionable unit with a state | `title`, `status` (`open`/`done`/`dropped`) | `belongs_to` → Project/Area, `assigned_to` → Person, `blocked_by` → Task |
 | `Project` | Outcome with an end state | `title`, `status`, `outcome` | `area` → Area, `owner` → Person |
 | `Area` | Ongoing responsibility, no end date | `title` | `parent` → Area |
-| `Person` | Someone you interact with | `name` | `area` → Area, `related_to` → Person |
+| `Person` | Someone you interact with. **Top-level:** not placed in any Area or Project, and never in the Inbox | `name` | Named relations to any item (names are chosen by the implementation or the user, e.g. `works_with`, `owner_of`); no required relation |
 
 | `Archive` | Holds retired objects of any type | `title` | `contains` → any item except Archive |
 
@@ -144,8 +144,10 @@ the first match in this chain:
 3. The **Inbox** area's `defaults.T` — the vault-wide default.
 4. The plugin's built-in implementation for `T`.
 
+For `Person` only steps 3 and 4 apply: a person has no Project or Area, so its implementation is the vault-wide Inbox default, then the built-in.
+
 The **Inbox** is a system-created Area (`area:inbox`) that cannot be deleted. Items with no placement relation (Tasks, Notes,
-Projects, Areas and Persons; see doc 06) belong to it. Because it is an Area, it is just a normal Area item whose `defaults` hold the vault-wide values.
+Projects and Areas; see doc 06) belong to it. **Persons are top-level** and are never placed, so they are never in the Inbox. Because it is an Area, it is just a normal Area item whose `defaults` hold the vault-wide values.
 
 ```markdown
 ---
@@ -175,7 +177,7 @@ defaults:
 ---
 ```
 
-`defaults` is a core field on `Area` and `Project`, so every implementation of those types supports it. An Area (including the Inbox) may set a default for any core type; a **Project may set defaults only for the types that live inside it: `task` and `note`**. Other keys on a Project are a validation error.
+`defaults` is a core field on `Area` and `Project`, so every implementation of those types supports it. The **Inbox** may set a default for any core type; any other Area may set one for any core type except `person`, since persons are top-level and only the Inbox's vault-wide `person` default applies. A **Project may set defaults only for the types that live inside it: `task` and `note`**. Other keys on a Project are a validation error.
 
 ## Install-time setup
 

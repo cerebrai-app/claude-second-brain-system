@@ -78,10 +78,10 @@ Each core type has one **placement relation**, the relation that puts an item un
 | `Note` | `about` → Project/Area/Person | Only an `about` target of Project or Area counts as placement. |
 | `Project` | `area` → Area | |
 | `Area` | `parent` → Area | |
-| `Person` | `area` → Area | A person belongs to at most one Area *(Decided)*; a person has no Project placement. |
+| `Person` | none | **Top-level** *(Decided)*: a person is not placed in any Area or Project, is never in the Inbox, and is never triaged. Its relations are named relations to any item (doc 01). |
 
 An item is **in the Inbox** when its placement relation is absent or points at `area:inbox`. System items (the Inbox, the Archive) and archived items are never candidates.
-Finding candidates uses `list` per binding of the five placed types (paged) and filters client-side, because the structural `query` can test that a relation is present but not that
+Finding candidates uses `list` per binding of the four placed types (paged) and filters client-side, because the structural `query` can test that a relation is present but not that
 it is absent (doc 03). The sync seen state (doc 05) can narrow the scan for large vaults.
 
 ## Capture
@@ -90,6 +90,7 @@ it is absent (doc 03). The sync seen state (doc 05) can narrow the scan for larg
 
 - The type defaults to `note`; `--type task` (and so on) overrides it. The implementation is the Inbox `defaults.<type>` (doc 01 resolution, step 3).
 - The item is created with no placement relation, so it is in the Inbox. This fires `create` and `capture` (doc 05).
+- **`--type person` is the exception:** a person is top-level, so it is created with the vault-wide `person` default, is not in the Inbox, fires `create` only (no `capture`), and is never offered for triage.
 - Items created outside the plugin that land in the Inbox are detected by sync and fire `capture` as well (`origin: external/...`), but **do not** trigger the inline
   offer below; they simply appear in the triage backlog.
 
@@ -169,10 +170,10 @@ Each triage operation is logged like a rule run (doc 05). For the markdown adapt
 
 ## Open questions
 
-1. ~~Persons and placement~~ — resolved: a person can belong to an **Area** (`area` relation, doc 01). Persons are triaged like other items, with an Area as the only placement.
+1. ~~Persons and placement~~ — resolved: **persons are top-level**: no Area or Project, never in the Inbox, never triaged. They can have named relations to any item (doc 01).
 2. **Type inference at capture.** `capture` currently defaults to `note`. Should Claude infer the type (task vs. note) and ask for confirmation?
 3. **Bulk triage.** Apply one Area/Project to several selected items in a single approval.
-4. **Candidate discovery cost.** A client-side scan of five types across all bindings; do we need a structural "relation absent" query key in doc 03?
+4. **Candidate discovery cost.** A client-side scan of four types across all bindings; do we need a structural "relation absent" query key in doc 03?
 5. **Commit granularity.** One commit per session (as written), or one per converted item so each conversion can be reverted separately.
 6. **Half-converted marker location.** Reuses the pending-style local state in this draft; may deserve its own file under `.brain/`.
 7. **Undoing a conversion.** Triage back to the original implementation is the only path; is a dedicated "undo last triage" worth having?
