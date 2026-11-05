@@ -45,7 +45,7 @@ The core provides contracts; implementations provide behavior.
 | `Task` | Actionable unit with a state | `title`, `status` (`open`/`done`/`dropped`) | `belongs_to` → Project/Area, `assigned_to` → Person, `blocked_by` → Task |
 | `Project` | Outcome with an end state | `title`, `status`, `outcome` | `area` → Area, `owner` → Person |
 | `Area` | Ongoing responsibility, no end date | `title` | `parent` → Area |
-| `Person` | Someone you interact with | `name` | `related_to` → Person |
+| `Person` | Someone you interact with | `name` | `area` → Area, `related_to` → Person |
 
 | `Archive` | Holds retired objects of any type | `title` | `contains` → any item except Archive |
 
@@ -144,8 +144,8 @@ the first match in this chain:
 3. The **Inbox** area's `defaults.T` — the vault-wide default.
 4. The plugin's built-in implementation for `T`.
 
-The **Inbox** is a system-created Area (`area:inbox`) that cannot be deleted. Items and Projects with no `area` relation
-belong to it. Because it is an Area, it is just a normal Area item whose `defaults` hold the vault-wide values.
+The **Inbox** is a system-created Area (`area:inbox`) that cannot be deleted. Items with no placement relation (Tasks, Notes,
+Projects, Areas and Persons; see doc 06) belong to it. Because it is an Area, it is just a normal Area item whose `defaults` hold the vault-wide values.
 
 ```markdown
 ---

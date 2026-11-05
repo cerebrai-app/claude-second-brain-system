@@ -78,10 +78,10 @@ Each core type has one **placement relation**, the relation that puts an item un
 | `Note` | `about` → Project/Area/Person | Only an `about` target of Project or Area counts as placement. |
 | `Project` | `area` → Area | |
 | `Area` | `parent` → Area | |
-| `Person` | none | Persons are not placed and are not triaged. They stay in the Inbox implicitly and can be left alone, archived or converted by hand. *(Decided: leaning, see Open questions.)* |
+| `Person` | `area` → Area | A person belongs to at most one Area *(Decided)*; a person has no Project placement. |
 
 An item is **in the Inbox** when its placement relation is absent or points at `area:inbox`. System items (the Inbox, the Archive) and archived items are never candidates.
-Finding candidates uses `list` per binding of the four placed types (paged) and filters client-side, because the structural `query` can test that a relation is present but not that
+Finding candidates uses `list` per binding of the five placed types (paged) and filters client-side, because the structural `query` can test that a relation is present but not that
 it is absent (doc 03). The sync seen state (doc 05) can narrow the scan for large vaults.
 
 ## Capture
@@ -169,10 +169,10 @@ Each triage operation is logged like a rule run (doc 05). For the markdown adapt
 
 ## Open questions
 
-1. **Persons and placement.** Leaning: persons are not triaged. Do they need a placement (for example `area`), or is the Inbox fine forever?
+1. ~~Persons and placement~~ — resolved: a person can belong to an **Area** (`area` relation, doc 01). Persons are triaged like other items, with an Area as the only placement.
 2. **Type inference at capture.** `capture` currently defaults to `note`. Should Claude infer the type (task vs. note) and ask for confirmation?
 3. **Bulk triage.** Apply one Area/Project to several selected items in a single approval.
-4. **Candidate discovery cost.** A client-side scan of four types across all bindings; do we need a structural "relation absent" query key in doc 03?
+4. **Candidate discovery cost.** A client-side scan of five types across all bindings; do we need a structural "relation absent" query key in doc 03?
 5. **Commit granularity.** One commit per session (as written), or one per converted item so each conversion can be reverted separately.
 6. **Half-converted marker location.** Reuses the pending-style local state in this draft; may deserve its own file under `.brain/`.
 7. **Undoing a conversion.** Triage back to the original implementation is the only path; is a dedicated "undo last triage" worth having?
