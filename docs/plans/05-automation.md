@@ -101,7 +101,7 @@ automation:
 |---|---|
 | `id` | Unique within the implementation. |
 | `on` | The trigger (below). |
-| `match` | Optional **structural** condition over the event (types, changed fields, new values, relation names). Deterministic. |
+| `match` | Optional **structural** condition over the event (types, changed fields, new values, relation names, the item's traits, and namespaced trait fields such as `colleague.employer`). Deterministic. |
 | `when` | Optional **natural-language** condition, judged by Claude (same interpretation model as sorts/filters, doc 01). Evaluated only after `match` passes. A `when` that cannot be judged confidently is treated as **false** and logged. *(Decided: acceptable.)* |
 | `do` | Ordered list of actions. Stops at the first failing action unless it has `on_error: continue`. |
 | `enabled` | Defaults to true. A rule can be disabled without being removed. |

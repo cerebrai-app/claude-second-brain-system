@@ -22,7 +22,7 @@ The core provides contracts; implementations provide behavior.
 | Extensibility | Five core types (`Note`, `Task`, `Project`, `Area`, `Person`) are extensible (a vault defines its own schema fields for them); `Person` has exactly one **active** implementation per vault (a second may exist only as a migration target, see Default implementation resolution), `markdown` in its own `people/` directory by default. **`Archive` is a sixth core type that is not extensible**: no user implementations, one built-in definition. |
 | Archive | `Archive` is a container core type that can hold objects of **every other type** (the same objects as the vault, keeping their `ref`, `type` and `impl`). Archiving an item moves it into the Archive; it is the default way to remove an item (permanent delete is the exception). See Archive below and doc 03. |
 | Versioning | Schema changes are handled by **migration instructions an agent follows**, driven by a **version manifest in the brain repo**. |
-| Inheritance | An implementation `extends` a **core type only**; no implementation-to-implementation inheritance. Shared behavior is reused by copying or by referencing named sorts/filters/actions, not by extending. |
+| Inheritance | An implementation `extends` a **core type only**; no implementation-to-implementation inheritance. Shared behavior is reused by copying or by referencing named sorts/filters/actions, not by extending. The one exception is **traits** (see Traits): optional, namespaced field bundles attached to individual items. |
 
 ## Concepts
 
@@ -133,6 +133,75 @@ implements the slot's contract (stdin/stdout JSON). Declarative is the default; 
 5. ~~Code vs. user definitions~~ — resolved (see Ownership).
 6. ~~Schema evolution~~ — resolved in principle (see Versioning). Specified in doc 02.
 7. ~~Extensibility~~ — resolved: all five original types extensible; `Archive` is a non-extensible sixth type.
+
+## Traits
+
+A **trait** is a named, reusable bundle of schema fields (and optionally named sorts and filters) that can be attached to individual items. Traits give an item
+kind-specific structure without a separate implementation. They exist mainly for `Person`, which has a single active implementation (see Default implementation resolution):
+a colleague, a client and a friend need different fields on the same implementation.
+
+**Scope** *(Decided)*: the mechanism is general, but the MVP enables traits for **`Person` only**. Other types already support several implementations
+(`deferred.md`).
+
+**Definition.** `second-brain/.brain/traits/<trait-name>.md`, YAML frontmatter plus a guidance body, like an implementation definition:
+
+```yaml
+---
+trait: colleague
+applies_to: [person]
+version: 1
+schema:
+  fields:
+    employer: { type: string }
+    team:     { type: string }
+sorts:
+  by-employer: "Alphabetical by employer, then by name."
+filters:
+  at-employer: "People whose employer matches the one named in the request."
+---
+Guidance for Claude when working with people who are colleagues.
+```
+
+**Fields are namespaced by trait** *(Decided)*. A trait's fields live under the trait's name, so two traits can both define `employer` without clashing: `colleague.employer`,
+`client.employer`, `friend.employer`. In an item they are stored nested under the trait name, and the item lists its traits:
+
+```markdown
+---
+id: 01JPERSON...
+type: person
+impl: default-person
+name: Alex Rivera
+traits: [colleague, client]
+colleague:
+  employer: Acme
+  team: Platform
+client:
+  employer: Globex
+---
+```
+
+- **References** to a trait field use the dotted form `colleague.employer` in sorts, filters, `match` and rule conditions (docs 04 and 05).
+- **Named sorts and filters** from a trait are namespaced the same way (`colleague.by-employer`).
+- A trait name must be lowercase (`[a-z][a-z0-9_-]*`) and must not equal any core field, implementation field or reserved key (`id`, `type`, `impl`, `traits`, ...). Setup and validation
+  reject a clash, which is what keeps the namespaces separate.
+- An item's trait fields are validated only for the traits it lists. A trait field present without its trait listed is a validation error. Removing a trait from an item removes
+  its fields only after the user confirms (the data would otherwise be lost silently).
+- **Required vs. optional:** fields a trait marks `required` are required only on items that carry that trait.
+- A trait may apply to the core types it lists in `applies_to`; attaching it to another type is a validation error.
+
+**Traits are composition, not inheritance.** Doc 01 rules out implementation-to-implementation inheritance. Traits are a deliberate, limited exception: they contribute namespaced fields,
+sorts and filters only. They have **no storage, no automation and no relations of their own**; rules still live on the implementation (doc 05), and `match` can test whether an item has a trait.
+
+**Storage and conversion.** Trait fields live in the item, so they use the item's implementation's binding. An adapter must be able to persist the `traits` list and nested trait
+fields (a `supports_traits` capability, doc 03). Because trait fields are namespaced and travel with the item, conversion between implementations (doc 06) carries them over unchanged
+provided the target adapter supports traits.
+
+**Versioning.** Traits are versioned and migrated like implementations (doc 02): `version` in the definition, a manifest entry, and a migration note for breaking changes.
+
+**Open questions**
+1. Can an implementation restrict which traits may be attached to its items (an allow-list)?
+2. Does a trait declare the relations it expects (for example `colleague` expecting a `works_with` relation), or stay fields-only?
+3. Do traits get their own `defaults` (for example a default set of traits for new items)?
 
 ## Default implementation resolution
 

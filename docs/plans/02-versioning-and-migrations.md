@@ -33,6 +33,8 @@ migrations:                     # applied history, append-only
 implementations:
   task/gtd-task:   { version: 3 }
   note/zettel-note: { version: 1 }
+traits:                         # trait definitions (doc 01); versioned like implementations
+  colleague: { version: 1 }
 ```
 
 - Written by the install flow (`core_version` = the plugin's current core version, empty `migrations`).
