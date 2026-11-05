@@ -19,7 +19,7 @@ The core provides contracts; implementations provide behavior.
 | Default implementation | **Cascading overrides: Project → Area → Inbox.** The **Inbox is the default Area**: any item or Project with no explicit area belongs to it. The Inbox's defaults are the vault-wide defaults and are configured at plugin install. Areas and Projects may each override them. |
 | Cross-implementation relations | References are `<type>:<id>` and resolve across implementations; no implementation-specific syntax is needed. |
 | Ownership | **Core** types, contracts, built-in starters and migration instructions live in the plugin repo (`plugins/brain/`). **User-defined** implementations, config and data live in the user's brain repo (`second-brain`). |
-| Extensibility | Five core types (`Note`, `Task`, `Project`, `Area`, `Person`) are extensible. **`Archive` is a sixth core type that is not extensible**: no user implementations, one built-in definition. |
+| Extensibility | Five core types (`Note`, `Task`, `Project`, `Area`, `Person`) are extensible (a vault defines its own schema fields for them); `Person` is limited to **one implementation per vault**, `markdown` in its own `people/` directory by default. **`Archive` is a sixth core type that is not extensible**: no user implementations, one built-in definition. |
 | Archive | `Archive` is a container core type that can hold objects of **every other type** (the same objects as the vault, keeping their `ref`, `type` and `impl`). Archiving an item moves it into the Archive; it is the default way to remove an item (permanent delete is the exception). See Archive below and doc 03. |
 | Versioning | Schema changes are handled by **migration instructions an agent follows**, driven by a **version manifest in the brain repo**. |
 | Inheritance | An implementation `extends` a **core type only**; no implementation-to-implementation inheritance. Shared behavior is reused by copying or by referencing named sorts/filters/actions, not by extending. |
@@ -27,7 +27,7 @@ The core provides contracts; implementations provide behavior.
 ## Concepts
 
 - **Core type** — a contract shipped by the plugin: required fields, allowed relations, and the behavior slots it supports.
-- **Implementation** — a user-defined realization of a core type (e.g. `Task` → `gtd-task`, `linear-task`). A vault may have several per core type.
+- **Implementation** — a user-defined realization of a core type (e.g. `Task` → `gtd-task`, `linear-task`). A vault may have several per core type, **except `Person`, which has exactly one implementation per vault**.
 - **Item** — an instance of an implementation. Always carries `id`, `type` (core), `impl` (implementation name), `created`, `updated`.
 - **Behavior slots** — the pluggable parts of an implementation:
   1. **Schema** — fields beyond the core required set, with types and validation.
@@ -144,7 +144,7 @@ the first match in this chain:
 3. The **Inbox** area's `defaults.T` — the vault-wide default.
 4. The plugin's built-in implementation for `T`.
 
-For `Person` only steps 3 and 4 apply: a person has no Project or Area, so its implementation is the vault-wide Inbox default, then the built-in.
+`Person` does not use this chain: a vault has exactly **one** person implementation (default `default-person`, `markdown` storage at `people/{id}.md`), and every person uses it. Nothing can set a `person` default, and creating a second `person` implementation is a validation error.
 
 The **Inbox** is a system-created Area (`area:inbox`) that cannot be deleted. Items with no placement relation (Tasks, Notes,
 Projects and Areas; see doc 06) belong to it. **Persons are top-level** and are never placed, so they are never in the Inbox. Because it is an Area, it is just a normal Area item whose `defaults` hold the vault-wide values.
@@ -160,7 +160,6 @@ defaults:
   task: gtd-task
   note: zettel-note
   project: default-project
-  person: default-person
   area: default-area
 ---
 ```
@@ -177,7 +176,7 @@ defaults:
 ---
 ```
 
-`defaults` is a core field on `Area` and `Project`, so every implementation of those types supports it. The **Inbox** may set a default for any core type; any other Area may set one for any core type except `person`, since persons are top-level and only the Inbox's vault-wide `person` default applies. A **Project may set defaults only for the types that live inside it: `task` and `note`**. Other keys on a Project are a validation error.
+`defaults` is a core field on `Area` and `Project`, so every implementation of those types supports it. The **Inbox** may set a default for any core type except `person`; any other Area may too. `person` is never a valid `defaults` key, since a vault has a single person implementation. A **Project may set defaults only for the types that live inside it: `task` and `note`**. Other keys on a Project are a validation error.
 
 ## Install-time setup
 

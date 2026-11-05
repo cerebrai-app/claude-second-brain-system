@@ -28,7 +28,8 @@ Setup asks **one** question. It shows a summary of what it will create and asks 
 | Vault `name` | The repo directory name. |
 | Storage for every core type | Built-in `markdown` adapter in the brain repo. |
 | Archive adapter | **Built-in `markdown` adapter** in the brain repo, at `archive/{type}/{impl}/{id}.md` (doc 03). The adapter is fixed at install; this is the only place it is chosen, so the summary states it plainly. A user who wants a `script` adapter edits the summary's choice before confirming; it must report `archive_adapter: true` (doc 03) or setup refuses it. |
-| Inbox `defaults` | One built-in starter implementation per core type: `default-task`, `default-note`, `default-project`, `default-person`, `default-area`. |
+| Inbox `defaults` | One built-in starter implementation per placed core type: `default-task`, `default-note`, `default-project`, `default-area`. (There is no `person` default; see next row.) |
+| Person implementation | Exactly one per vault *(Decided)*: `default-person`, `markdown` storage in its own directory, `people/{id}.md`. |
 
 The summary lists the files to be created and the defaults above. The user may answer *go*, *change <choice>*, or *cancel*. Everything after install is changed
 by editing files (or asking Claude to), not by a setup wizard: Inbox `defaults` live on the Inbox area item and are validated like any `defaults` (doc 01);
@@ -39,7 +40,7 @@ the Archive adapter stays fixed.
 In this order, so an interrupted run is recoverable:
 
 1. `.brain/config.yml`: `version`, the vault `name`, the `archive` adapter choice, and the location of implementation definitions (doc 01).
-2. `.brain/impls/<type>/default-<type>.md` for each of the five extensible types: the built-in starter definitions, copied from the plugin
+2. `.brain/impls/<type>/default-<type>.md` for each of the five extensible types (including the single `person` implementation): the built-in starter definitions, copied from the plugin
    (`plugins/brain/`). Copied, not linked, so the vault owns them (doc 01, Ownership). Each starts at `version: 1`.
 3. The **Archive** (`archive:archive`), registered with the chosen Archive adapter (doc 03).
 4. The **Inbox** area item (`area:inbox`, `system: true`) with `defaults` for each core type pointing at the starters. It is stored by `default-area`'s binding.
@@ -62,7 +63,7 @@ silently, so installing into an existing repo of notes causes no `create` event 
 
 - Manifest and `config.yml` present and consistent with the implementation definitions on disk.
 - Exactly one Archive; the Inbox exists, is an Area, and cannot be deleted; its `defaults` name implementations that exist.
-- Impl ids are unique within each core type (doc 03).
+- Impl ids are unique within each core type (doc 03), and there is exactly one `person` implementation.
 - Required `.gitignore` entries present.
 
 Fixes (for example re-creating a deleted starter definition or the Inbox) are shown as a proposal and applied only on approval. A missing or mismatched Archive adapter is
@@ -90,7 +91,7 @@ it is absent (doc 03). The sync seen state (doc 05) can narrow the scan for larg
 
 - The type defaults to `note`; `--type task` (and so on) overrides it. The implementation is the Inbox `defaults.<type>` (doc 01 resolution, step 3).
 - The item is created with no placement relation, so it is in the Inbox. This fires `create` and `capture` (doc 05).
-- **`--type person` is the exception:** a person is top-level, so it is created with the vault-wide `person` default, is not in the Inbox, fires `create` only (no `capture`), and is never offered for triage.
+- **`--type person` is the exception:** a person is top-level, so it is created with the vault's single person implementation, is not in the Inbox, fires `create` only (no `capture`), and is never offered for triage.
 - Items created outside the plugin that land in the Inbox are detected by sync and fire `capture` as well (`origin: external/...`), but **do not** trigger the inline
   offer below; they simply appear in the triage backlog.
 
