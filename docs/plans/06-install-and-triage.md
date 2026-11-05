@@ -63,7 +63,7 @@ silently, so installing into an existing repo of notes causes no `create` event 
 
 - Manifest and `config.yml` present and consistent with the implementation definitions on disk.
 - Exactly one Archive; the Inbox exists, is an Area, and cannot be deleted; its `defaults` name implementations that exist.
-- Impl ids are unique within each core type (doc 03), and there is exactly one `person` implementation.
+- Impl ids are unique within each core type (doc 03), and there is exactly one **active** `person` implementation (plus at most one flagged `migration_target`, doc 01).
 - Required `.gitignore` entries present.
 
 Fixes (for example re-creating a deleted starter definition or the Inbox) are shown as a proposal and applied only on approval. A missing or mismatched Archive adapter is
@@ -91,7 +91,7 @@ it is absent (doc 03). The sync seen state (doc 05) can narrow the scan for larg
 
 - The type defaults to `note`; `--type task` (and so on) overrides it. The implementation is the Inbox `defaults.<type>` (doc 01 resolution, step 3).
 - The item is created with no placement relation, so it is in the Inbox. This fires `create` and `capture` (doc 05).
-- **`--type person` is the exception:** a person is top-level, so it is created with the vault's single person implementation, is not in the Inbox, fires `create` only (no `capture`), and is never offered for triage.
+- **`--type person` is the exception:** a person is top-level, so it is created with the vault's active person implementation, is not in the Inbox, fires `create` only (no `capture`), and is never offered for triage.
 - Items created outside the plugin that land in the Inbox are detected by sync and fire `capture` as well (`origin: external/...`), but **do not** trigger the inline
   offer below; they simply appear in the triage backlog.
 
@@ -132,6 +132,10 @@ A `conflict` means re-read and re-propose.
 
 Conversion moves an item to another implementation of the **same core type**, keeping its `id` and therefore every existing reference (doc 03). Converting to a different core type
 is not triage and is out of scope.
+
+Conversion is a plugin operation, not tied to triage: the same mapping, report, apply order and failure handling serve any item, including a **person** moving to a migration-target
+implementation (doc 01). Persons are never triaged, but they can be converted individually. A bulk command that converts many items (all persons, or all items of an implementation)
+by repeating this operation is post-MVP (see `deferred.md`).
 
 **Mapping is deterministic.** Claude is not involved in deciding what carries over:
 
@@ -177,7 +181,8 @@ Each triage operation is logged like a rule run (doc 05). For the markdown adapt
 4. **Candidate discovery cost.** A client-side scan of four types across all bindings; do we need a structural "relation absent" query key in doc 03?
 5. **Commit granularity.** One commit per session (as written), or one per converted item so each conversion can be reverted separately.
 6. **Half-converted marker location.** Reuses the pending-style local state in this draft; may deserve its own file under `.brain/`.
-7. **Undoing a conversion.** Triage back to the original implementation is the only path; is a dedicated "undo last triage" worth having?
+7. **Bulk conversion command.** Selection (all items of an implementation, a filter), one combined report vs. per-item, and ordering/resumability for large vaults. Post-MVP.
+8. **Undoing a conversion.** Triage back to the original implementation is the only path; is a dedicated "undo last triage" worth having?
 
 ## Next steps
 
