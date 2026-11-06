@@ -37,6 +37,7 @@ automation:
     requires:
       - { type: task, impl: task }
       - { type: note, impl: journal, min_version: 2 }   # min_version optional (implementation version, doc 02)
+      - { type: area, impl: default-area }              # needed because `place` may find or create the Journals area
     on: manual                           # `schedule` is post-MVP
     do:
       - action: surface
@@ -46,7 +47,8 @@ automation:
         as: todays_tasks
         show: false
       - action: write_body
-        target: { find: { type: note, impl: journal, where: { title: "{{ today }}" } }, create_if_missing: true }
+        target: { find: { type: note, impl: journal, where: { title: "{{ today }}" } }, create_if_missing: true,
+                  place: { find: { type: area, where: { title: Journals } }, create_if_missing: true } }
         section: "## Today's tasks"
         mode: replace_section
         text: "{{ todays_tasks | checklist }}"
@@ -175,6 +177,15 @@ user may need to resolve unmapped, invalid or missing fields in a conversion rep
 applied only on approval. It does not fire `create` or `capture` and does not fire `before_delete` for the source delete; the target implementation's rules see an `update`
 (with `changed` including `impl`). Permanent `delete` itself remains unavailable to automation.
 
+### Placing items that automation creates *(Decided)*
+
+`create_item`, and a `write_body` target with `create_if_missing`, accept `place:` to set the new item's **placement relation** (doc 06) for the types that have one (`task.belongs_to`, `note.about`, `project.area`):
+
+- a ref: `place: "area:01J..."`, or
+- a lookup: `place: { find: { type: area, where: { title: Journals } }, create_if_missing: true }`. `find` matches Areas or Projects by their fields (more than one match is an error); with `create_if_missing` a missing one is created with the given `where` fields as its fields (`title` is required) and the default implementation from the doc 01 cascade.
+
+Use it whenever the destination is known, for example a journal note placed under a `Journals` area. Without `place`, the new item has no placement, so it **lands in the Inbox** and becomes a triage candidate (and fires `capture`); loading a rule that creates a `task`, `note` or `project` without `place` is a warning. A vault rule must list the implementations of every type it finds or creates in `requires`.
+
 ### Using `surface` results as input to later actions
 
 `surface` can collect items for another operation. `as: <name>` binds the result set (ordered `ref`s plus the `fields` and `relations` of each item,
@@ -199,7 +210,8 @@ Example: write today's actionable tasks into the daily journal note.
       as: todays_tasks
       show: false
     - action: write_body
-      target: { find: { type: note, impl: journal, where: { title: "{{ today }}" } }, create_if_missing: true }
+      target: { find: { type: note, impl: journal, where: { title: "{{ today }}" } }, create_if_missing: true,
+                place: { find: { type: area, where: { title: Journals } }, create_if_missing: true } }
       section: "## Today's tasks"          # replaced in place; created at the end if absent
       mode: replace_section
       text: "{{ todays_tasks | checklist }}"
@@ -257,7 +269,9 @@ Items are also edited by hand (markdown files) or in a backend's own UI. The plu
   and a compact snapshot of `fields` and `relations` (no body). Entries are updated after the plugin's own writes too, so its
   own changes are not seen as external.
 - **Algorithm per binding:** page through `list` (using `updated_since` where the adapter honors it, otherwise a full paged scan) and compare:
+  - Collect the results of **all bindings of the type** first, then diff, so items are matched **by ref across bindings** *(Decided)*:
   - ref not in seen state → a **new object**: emit `create` (and `capture` if it is in the Inbox area).
+  - ref seen in one binding and now found in **another** (an implementation conversion done by hand or by an interrupted run) → one `update` with `changed` including `impl`, never a `create` plus a missing item.
   - `revision` differs → emit `update`, with `before` taken from the snapshot and `changed` computed from the field/relation diff.
   - item now has `archive` set (moved by hand) → emit `archive`; cleared → `unarchive`.
   - relation added/removed → also emit `relation` events.
@@ -266,6 +280,11 @@ Items are also edited by hand (markdown files) or in a backend's own UI. The plu
 - **Event marking:** reconciled events carry `origin: external/<type>/<impl-id>` (the core type and implementation id of the binding the change was detected on,
   e.g. `external/task/my-task-impl`) and `detected_at`; they have `depth: 0`, so rules triggered by them run normally. The leading `external/` segment is what marks an
   event as sync-detected (see Pending approvals). The body of the payload says `before` is a snapshot (fields/relations only).
+- **Hand-written files** *(Decided: adopted automatically)*. A markdown file inside a binding's directory that lacks the identity fields (`id`, `type`, `impl`) is an **unadopted file**. The sync sub-agent only reports them; the main session **adopts** them at dispatch:
+  - It adds the missing fields to the file's frontmatter: `id` (a new ULID), `type` and `impl` (from the binding), `slug` (the file's name stem; the file keeps its name), `created` (the first git commit time of the file, else its modification time), `updated` (now), and `title` (existing, else the first `#` heading, else the slug in words). Schema `default`s fill absent fields.
+  - It is **additive only**: it never renames the file or changes the body or any existing key, value or key order.
+  - A file whose required fields remain unmet is **not adopted**: it is reported as invalid and left untouched. A directory that matches more than one binding is ambiguous: reported, nothing adopted. Files outside every binding's directory are not scanned.
+  - An adopted file is then a new object: `create` (and `capture` if it is in the Inbox), `origin: external/<type>/<impl-id>`. Adoption is the only case where sync writes to an item, it touches only these fields, it appears in the sync report, and git can undo it.
 - **Validation:** an externally created or changed item is validated against its implementation schema first. If invalid, no rules run on it; it is
   reported to the user as invalid.
 - **First run:** with no seen state, the plugin builds the baseline silently (no `create` storm). Only changes after the baseline emit events.
@@ -277,7 +296,7 @@ Items are also edited by hand (markdown files) or in a backend's own UI. The plu
 Reconciliation runs in a dedicated **sub-agent** started at session start, in the background, so the main session is usable immediately.
 
 - **Role (detect only):** it reads through the storage contract (`list`, `read`, `resolve`), compares against the seen state, updates the
-  seen state, and returns a **sync report** and an ordered **event list** to the main session. It does **not** run rules, apply operations,
+  seen state, and returns a **sync report** (including unadopted files) and an ordered **event list** to the main session. It does **not** adopt files, run rules, apply operations,
   call hooks, or propose or apply `claude` actions. The main session dispatches the events afterward (deterministic rules immediately, `claude` proposals into the pending queue, see Pending approvals), so approvals, loop protection and
   logging behave as in the Execution model.
 - **No rate limiting in the MVP** *(Decided)*: the sub-agent does not pace or throttle its requests, and has no backoff beyond the single retry below. Adapters are scanned **in parallel with each other**

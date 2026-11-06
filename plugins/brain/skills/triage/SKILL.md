@@ -25,7 +25,7 @@ Items of types `task`, `note`, `project` that are in the Inbox: their placement 
 A single update with the revision you read. On `conflict`, re-read and re-propose.
 
 ## Conversion
-Follow "Conversion" in `../core/references/storage.md`: deterministic mapping, a conversion report for unmapped/invalid/missing fields that the user resolves field by field, create with the same id, delete the source, and the half-converted marker if the delete fails. The conversion runs only after the user approves the final diff. Trait lists and trait fields carry over only if the target adapter supports traits. Triage back to the original implementation is the only undo.
+Follow "Conversion" in `../core/references/storage.md`: deterministic mapping, a conversion report (unmapped, invalid and missing fields that the user resolves field by field; fields *filled by default* shown for information), create with the same id, delete the source, and the half-converted marker if the delete fails. The conversion runs only after the user approves the final diff. Trait lists and trait fields carry over only if the target adapter supports traits. Triage back to the original implementation is the only undo.
 
 ## Finish
 Log each operation. Offer **one** git commit at the end of the session ("brain: triage N items"). Conversions on external backends cannot be reverted with git, so always show the diff first.

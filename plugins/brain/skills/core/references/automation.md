@@ -18,6 +18,7 @@ Events carry `origin` (rule id chain, or `external/<type>/<impl-id>` for sync-de
 ## Actions
 
 Built-ins: `set_field`, `add_relation`/`remove_relation`, `set_relation` (replace one relation's targets), `create_item`, `archive`, `surface` (read-only result set from a named filter/sort; `as: name` binds it for later actions in the same rule; `show: false` hides the report), `write_body` (edit a markdown body; modes `replace_section` (default), `append`, `prepend`, `replace`), `notify`, `block` (before_delete only). `hook` runs an executable or `python:<name>` with the event JSON on stdin; confirm the command before the first run of a new or changed hook. Permanent `delete` is never available to automation.
+**Placing created items:** `create_item` and a `write_body` target with `create_if_missing` accept `place:` (a ref, or `{ find: { type, where }, create_if_missing: true }`) to set the new item's placement relation. Without it the item lands in the Inbox and becomes a triage candidate; warn when a rule creates a `task`, `note` or `project` without `place`. A vault rule must list every implementation it finds or creates in `requires`.
 `convert` is interactive only: it can appear in a `claude` proposal or in triage, never as a standalone rule action or from a hook.
 
 ## `claude` actions: propose, review, approve, apply

@@ -151,6 +151,7 @@ by repeating this operation is post-MVP (see `deferred.md`).
 | Core fields | Carried over unchanged. |
 | Source fields that **also exist** in the target schema | Carried over if the value validates against the target field's type and constraints; otherwise reported as *invalid*. |
 | Source fields **not in the target schema** | Reported as *unmapped*. |
+| Target fields with a **`default`** and no mapped value | Filled with the default (conversion is a create in the target) and listed in the report as *filled by default*; no resolution needed. |
 | Target fields that are **required and have no value or default** | Reported as *missing*. |
 | Relations | Core relations carry over. Implementation-specific relations carry over if the target allows the same relation name; otherwise reported as *unmapped*. |
 | `body` | Carried over. If the target's binding has `supports_body: false` and the body is non-empty, conversion is **blocked** until the user resolves it (doc 03). |
