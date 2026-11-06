@@ -80,7 +80,7 @@ Each core type has one **placement relation**, the relation that puts an item un
 | Type | Placement relation | Notes |
 |---|---|---|
 | `Task` | `belongs_to` → Project/Area | |
-| `Note` | `about` → Project/Area/Person | Only an `about` target of Project or Area counts as placement. |
+| `Note` | `about` → Project/Area/Person | Only the (at most one) Project or Area target counts as placement (doc 08). |
 | `Project` | `area` → Area | |
 | `Area` | `parent` → Area | |
 | `Person` | none | **Top-level** *(Decided)*: a person is not placed in any Area or Project, is never in the Inbox, and is never triaged. Its relations are named relations to any item (doc 01). |
@@ -195,4 +195,4 @@ Each triage operation is logged like a rule run (doc 05). For the markdown adapt
 
 1. ~~Resolve the open questions~~ — done; only the deferred bulk conversion command and undo remain (see `deferred.md`).
 2. ~~Update docs 01, 02 and 05~~ — done: doc 01 points here and no longer says "conversion mechanics TBD"; doc 02 already states the manifest is written by setup; doc 05 has `set_relation`, `convert` (interactive only) and the capture inline offer.
-3. Detail the per-type core fields and the built-in starter implementations (`default-*`) that setup copies.
+3. Write the built-in starter implementations (`default-*`) that setup copies, against the core fields in [08 — Core Types](08-core-types.md).

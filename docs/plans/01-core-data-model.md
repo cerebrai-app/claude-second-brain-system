@@ -37,19 +37,20 @@ The core provides contracts; implementations provide behavior.
   5. **Automation** — triggers (on-create, on-change, on-capture, manual; on-schedule is post-MVP, doc 05) and actions.
   6. **Relations** — typed links to other items (see below).
 
-## Core types (strawman)
+## Core types
+
+Summary only; fields, relations, cardinality, status rules and reserved names are specified in [08 — Core Types](08-core-types.md).
 
 | Type | Purpose | Required core fields | Core relations |
 |---|---|---|---|
-| `Note` | Knowledge / reference / captured thought | `title`, `body` | `about` → Project/Area/Person, `links` → Note |
-| `Task` | Actionable unit with a state | `title`, `status` (`open`/`done`/`dropped`) | `belongs_to` → Project/Area, `assigned_to` → Person, `blocked_by` → Task |
-| `Project` | Outcome with an end state | `title`, `status`, `outcome` | `area` → Area, `owner` → Person |
+| `Note` | Knowledge / reference / captured thought | `title` | `about` → Project/Area/Person (at most one Project or Area), `links` → Note |
+| `Task` | Actionable unit with a state | `title`, `status` (`open`/`done`/`dropped`, plus declared custom values) | `belongs_to` → Project/Area, `assigned_to` → Person, `blocked_by` → Task |
+| `Project` | Outcome with an end state | `title`, `status` (`outcome` optional) | `area` → Area, `owner` → Person |
 | `Area` | Ongoing responsibility, no end date | `title` | `parent` → Area |
 | `Person` | Someone you interact with. **Top-level:** not placed in any Area or Project, and never in the Inbox | `name` | Named relations to any item (names are chosen by the implementation or the user, e.g. `works_with`, `owner_of`); no required relation |
-
 | `Archive` | Holds retired objects of any type | `title` | `contains` → any item except Archive |
 
-Core fields are deliberately minimal; implementations add the rest. **`Archive` is the exception: it cannot be extended.**
+All five extensible types also have an optional `tags` list. Core fields are deliberately minimal; implementations add the rest. **`Archive` is the exception: it cannot be extended.**
 
 ### Archive
 
@@ -280,7 +281,7 @@ specified in doc 06.
 ## Next steps
 
 1. Write the install flow and triage mechanics doc (setup steps, user-chosen vs. built-in defaults, converting an item between implementations). Docs 02 and 05 depend on it.
-2. Detail per-type core fields and relations, replacing the strawman table.
+2. ~~Detail per-type core fields and relations~~ — drafted in [08 — Core Types](08-core-types.md).
 3. Sketch the first built-in implementation of each core type as reference examples, used for install-time scaffolding.
 4. Finalize the "proposed" paths (`.brain/manifest.yml`, `plugins/brain/migrations/`, `.brain/impls/...`) once the install flow is written.
 5. Per-slot contracts are done: [03](03-storage-contract.md), [04](04-sort-filter.md), [05](05-automation.md). Deliberately postponed work is tracked in [Deferred and Out-of-Scope Items](deferred.md).
