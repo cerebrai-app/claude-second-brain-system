@@ -69,6 +69,7 @@ All five extensible types also have an optional `tags` map (`Map<String, String>
 ```markdown
 ---
 id: 01JABCDEF...          # stable, implementation-independent
+slug: draft-q4-plan       # human-readable file name, fixed at creation
 type: task                # core type
 impl: gtd-task            # implementation
 title: Draft Q4 plan
@@ -96,7 +97,7 @@ schema:
     priority: { type: enum, values: [low, med, high], default: med }
 storage:
   adapter: markdown            # built-in
-  path: "tasks/{status}/{id}.md"
+  path: "tasks/{status}/{slug}.md"
 sorts:
   due-then-priority: "Soonest due date first; undated tasks last; ties broken by higher priority first."
 filters:
@@ -214,7 +215,7 @@ the first match in this chain:
 3. The **Inbox** area's `defaults.T` — the vault-wide default.
 4. The plugin's built-in implementation for `T`.
 
-`Person` does not use this chain: a vault has exactly one **active** person implementation (default `default-person`, `markdown` storage at `people/{id}.md`), and every new person uses it. Nothing can set a `person` default.
+`Person` does not use this chain: a vault has exactly one **active** person implementation (default `default-person`, `markdown` storage at `people/{slug}.md`), and every new person uses it. Nothing can set a `person` default.
 
 A second person implementation is allowed **only as a migration target** for moving persons in bulk to a different implementation (for example from `markdown` to a CRM backend):
 

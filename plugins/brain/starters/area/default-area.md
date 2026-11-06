@@ -4,5 +4,5 @@ extends: area
 version: 1
 storage:
   adapter: markdown
-  path: "areas/{id}.md"
+  path: "areas/{slug}.md"
 ---

@@ -4,5 +4,5 @@ extends: person
 version: 1
 storage:
   adapter: markdown
-  path: "people/{id}.md"
+  path: "people/{slug}.md"
 ---

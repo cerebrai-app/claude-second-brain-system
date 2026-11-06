@@ -2,7 +2,7 @@
 
 ## Common to note, task, project, area, person
 
-- `title` (string, required; Person uses `name`), `tags` (`Map<String,String>`, default `{}`), optional `body` (markdown, envelope-level).
+- `title` (string, required; Person uses `name`), `slug` (plugin-maintained file-name stem made from the title at creation, unique in its directory with `-2`, `-3` suffixes, never changes afterwards), `tags` (`Map<String,String>`, default `{}`), optional `body` (markdown, envelope-level).
 - Envelope: `id`, `type`, `impl`, `created` (never changes), `updated` (set on every write), `revision`, `archive`, `archived_at`. Timestamps are UTC ISO 8601.
 - **Tags**: name → string value; no hierarchy. Names are trimmed, lowercased, no whitespace or control characters, unique per item; `.` and `/` are ordinary characters. A bare tag has the empty string as its value. A list of names is accepted on input and becomes empty-string values. A list or map as a value is an error.
 
@@ -39,4 +39,4 @@ Constraints: `required`, `default` (on create only), `min`/`max` (integer, numbe
 
 ## Reserved names (cannot be fields, relations or traits)
 
-`id type impl created updated revision archive archived_at body title name tags status completed outcome defaults system traits contains about links belongs_to assigned_to blocked_by area owner parent`
+`id type impl slug created updated revision archive archived_at body title name tags status completed outcome defaults system traits contains about links belongs_to assigned_to blocked_by area owner parent`

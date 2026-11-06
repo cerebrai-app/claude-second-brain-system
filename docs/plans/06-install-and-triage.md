@@ -27,9 +27,9 @@ Setup asks **one** question. It shows a summary of what it will create and asks 
 |---|---|
 | Vault `name` | The repo directory name. |
 | Storage for every core type | Built-in `markdown` adapter in the brain repo. |
-| Archive adapter | **Built-in `markdown` adapter** in the brain repo, at `archive/{type}/{impl}/{id}.md` (doc 03). The adapter is fixed at install; this is the only place it is chosen, so the summary states it plainly. A user who wants a `script` adapter edits the summary's choice before confirming; it must report `archive_adapter: true` (doc 03) or setup refuses it. |
+| Archive adapter | **Built-in `markdown` adapter** in the brain repo, at `archive/{type}/{impl}/{slug}.md` (doc 03). The adapter is fixed at install; this is the only place it is chosen, so the summary states it plainly. A user who wants a `script` adapter edits the summary's choice before confirming; it must report `archive_adapter: true` (doc 03) or setup refuses it. |
 | Inbox `defaults` | One built-in starter implementation per placed core type: `default-task`, `default-note`, `default-project`, `default-area`. (There is no `person` default; see next row.) |
-| Person implementation | Exactly one per vault *(Decided)*: `default-person`, `markdown` storage in its own directory, `people/{id}.md`. |
+| Person implementation | Exactly one per vault *(Decided)*: `default-person`, `markdown` storage in its own directory, `people/{slug}.md`. |
 | Python workspace | Created at `.brain/python/` with the package manager detected on the machine (`uv`, `poetry`, `pdm`, else `venv` + `pip`), shown in the summary and changeable before confirming (doc 07). Requires Python 3.12 or newer: an existing interpreter is used, otherwise the summary asks approval to fetch one with the user's tool. Optional: skipped, with a message, if none is found and the user declines. POSIX only for now. |
 
 The summary lists the files to be created and the defaults above. The user may answer *go*, *change <choice>*, or *cancel*. Everything after install is changed

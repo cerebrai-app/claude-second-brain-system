@@ -19,7 +19,7 @@ Rare. Always confirm with the user first, then run any `before_delete` rules (th
 
 ## Markdown adapter (default)
 
-One file per item at the binding's path template (placeholders `{id}`, `{type}`, `{impl}`, or any scalar field; default starters use `<dir>/{id}.md`). Write atomically (temp file in the same directory, then rename). Preserve unknown frontmatter keys and key order. Revision = git blob hash of the file as read. If a changed field changes the rendered path, move the file. Quote strings that YAML would read as another type (`yes`, `010`, `2026-12-01`). Archived items live at `archive/{type}/{impl}/{id}.md` with `archive` and `archived_at` set. The adapter never commits.
+One file per item at the binding's path template (placeholders `{slug}`, `{id}`, `{type}`, `{impl}`, or any scalar field, with an optional format `{field:%Y-%m-%d}` for date and datetime fields; default starters use `<dir>/{slug}.md`. A collision on `{slug}` gets the next free `-2`, `-3` suffix at creation; slugs never change afterwards, so files do not move when the title changes). Write atomically (temp file in the same directory, then rename). Preserve unknown frontmatter keys and key order. Revision = git blob hash of the file as read. If a changed field changes the rendered path, move the file. Quote strings that YAML would read as another type (`yes`, `010`, `2026-12-01`). Archived items live at `archive/{type}/{impl}/{slug}.md` with `archive` and `archived_at` set. The adapter never commits.
 
 ## Script adapters
 

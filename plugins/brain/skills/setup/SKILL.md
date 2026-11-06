@@ -15,9 +15,9 @@ Read the `core` skill first. Setup asks **one** question: it shows a summary and
 ## Summary to show (with these defaults)
 - Vault `name`: the repo directory name.
 - Storage for every type: the built-in `markdown` adapter.
-- Archive adapter: `markdown` at `archive/{type}/{impl}/{id}.md`. It is fixed at install, so say so. A `script` adapter is allowed only if it reports `archive_adapter: true`.
+- Archive adapter: `markdown` at `archive/{type}/{impl}/{slug}.md`. It is fixed at install, so say so. A `script` adapter is allowed only if it reports `archive_adapter: true`.
 - Inbox `defaults`: `default-task`, `default-note`, `default-project`, `default-area` (no `person` default).
-- Person implementation: exactly one, `default-person`, at `people/{id}.md`.
+- Person implementation: exactly one, `default-person`, at `people/{slug}.md`.
 - Python workspace: the package manager detected (`uv`, `poetry`, `pdm`, else `venv` + `pip`), Python 3.12 or newer. Optional; skipped if no suitable Python is found and the user declines to fetch one.
 - The list of files to be created.
 Accept `go`, `change <choice>`, or `cancel`.

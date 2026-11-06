@@ -19,7 +19,7 @@ extends: task
 version: 1
 storage:
   adapter: markdown
-  path: "tasks/{id}.md"
+  path: "tasks/{slug}.md"
 ---
 ```
 
@@ -29,15 +29,15 @@ Everything else is defined somewhere else:
 
 | Starter | Type | Storage path |
 |---|---|---|
-| `default-task` | `task` | `tasks/{id}.md` |
-| `default-note` | `note` | `notes/{id}.md` |
-| `default-project` | `project` | `projects/{id}.md` |
-| `default-area` | `area` | `areas/{id}.md` (the Inbox is stored here as `areas/inbox.md`) |
-| `default-person` | `person` | `people/{id}.md` (the vault's single active person implementation, doc 01) |
+| `default-task` | `task` | `tasks/{slug}.md` |
+| `default-note` | `note` | `notes/{slug}.md` |
+| `default-project` | `project` | `projects/{slug}.md` |
+| `default-area` | `area` | `areas/{slug}.md` (the Inbox is stored here as `areas/inbox.md`) |
+| `default-person` | `person` | `people/{slug}.md` (the vault's single active person implementation, doc 01) |
 
 ## Conventions shared by every starter
 
-- **One file per item, in its own top-level directory, named by `id`**, so renames and status changes never move files (doc 03 moves a file when its rendered path changes).
+- **One file per item, in its own top-level directory, named by a human-readable `slug`** (doc 08), fixed at creation, so renames and status changes never move files (doc 03 moves a file when its rendered path changes).
 - **Version:** `version: 1`. Breaking changes ship as core migrations (doc 02) that rewrite the vault's copies.
 - **No schema, status values, sorts, filters, automation, traits or guidance body.**
 

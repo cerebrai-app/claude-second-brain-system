@@ -4,5 +4,5 @@ extends: project
 version: 1
 storage:
   adapter: markdown
-  path: "projects/{id}.md"
+  path: "projects/{slug}.md"
 ---

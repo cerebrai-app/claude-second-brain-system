@@ -4,5 +4,5 @@ extends: task
 version: 1
 storage:
   adapter: markdown
-  path: "tasks/{id}.md"
+  path: "tasks/{slug}.md"
 ---

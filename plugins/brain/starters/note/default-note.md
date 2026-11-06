@@ -4,5 +4,5 @@ extends: note
 version: 1
 storage:
   adapter: markdown
-  path: "notes/{id}.md"
+  path: "notes/{slug}.md"
 ---
