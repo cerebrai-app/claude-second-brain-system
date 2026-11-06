@@ -100,6 +100,17 @@ The vault was wiped and rebuilt through the installed plugin (`claude -p`, steps
 6. **Ignored state was tracked.** A previous vault had committed `.brain/automation/seen/*`; setup now untracks them (`git rm --cached`) before its commit. Setup should do this by design, not by luck.
 7. **Headless runs need `-c`** (continue) to answer setup's confirmation, and `--allowedTools` for the file tools. `uv` chose Python 3.12.3 although 3.13 was installed; both satisfy the minimum.
 
+## Third rehearsal (slug as a schema field, shared ids-and-slugs reference)
+
+Wiped `devinsba/second-brain` and ran steps 1 to 10 headless through the installed plugin (`claude -p`, isolated config, local marketplace). All ten steps behaved as expected and the vault ends with 0 errors and 0 warnings: the `default-*` starters with their `slug` field and Slug section, a `gtd-task` and a `journal` implementation that each declare `slug`, a triage conversion, an interrupted conversion (duplicate-ref error and marker, then finished), sync adoption of a plain file (slug from its file name), a pending entry applied, a date-named journal note created once and skipped on the second run, and an approved script. Findings:
+
+1. **`defaults` syntax is undocumented.** Setting a project's `defaults.task` worked only because the model guessed `defaults: { task: gtd-task }`. Give it one example in the core automation or storage reference.
+2. **Nothing writes pending entries.** `brainctl sync` emits events; the model hand-wrote the pending JSON. Specify who writes it (a `brainctl rules` step, or document the shape).
+3. **Vault rules cannot say "today".** The journal rule had to carry a literal `<today's date>` placeholder, resolved by hand. Needs the template variables already listed under Next steps (`{{ today }}`).
+4. **`brainctl approve --all` does not exist.** TESTING step 9 and the `python` skill mention it; the model recomputed the hash and edited `registry.yml`. Build it or reword.
+5. **The conversion marker layout is the model's own.** The spec only says ref, both bindings and a timestamp; write the file shape down.
+6. **`/brain:run` must be invoked as a slash command.** Asked in prose, the model reported it as unavailable and ran the steps by hand (it is user-only). Not a plugin bug; note it in the headless instructions.
+
 ## Next steps
 
 1. Continue `brainctl` (doc 11): `create`, `update`, `archive`, `unarchive`, `delete`, `convert`. The `validate`, `sync` and `core` skills already call it.
