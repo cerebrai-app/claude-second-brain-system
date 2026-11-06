@@ -45,6 +45,76 @@ tags:
   binding rather than silently dropping values.
 - Tags are unvalidated labels with no schema. They are not traits (doc 01, Person only; traits add namespaced, validated fields) and not relations (links to other items). Filters, sorts and rule `match` can test a tag's presence, name and value.
 
+## Field types (implementation schema) *(Decided)*
+
+An implementation adds fields in `schema.fields` (doc 01). Each field has a `type` from this vocabulary and optional constraints:
+
+```yaml
+schema:
+  fields:
+    due:        { type: date }
+    priority:   { type: enum, values: [low, med, high], default: med }
+    estimate:   { type: integer, min: 0, max: 100 }
+    summary:    { type: text, max_length: 2000 }
+    reference:  { type: string, pattern: "^[A-Z]{2,5}-[0-9]+$" }
+    reviewed:   { type: boolean, default: false }
+    watchers:   { type: list, of: string, max_length: 10 }
+    stages:     { type: list, of: { type: enum, values: [draft, review, done] } }
+```
+
+### Types
+
+| Type | Meaning | Canonical encoding (JSON / frontmatter) |
+|---|---|---|
+| `string` | Single-line text. Line breaks are rejected. | JSON string |
+| `text` | Multi-line text (markdown allowed). Distinct from the item `body`, which is envelope-level. | JSON string |
+| `integer` | Whole number in the range ±(2^53 − 1), so it survives JSON. | JSON number |
+| `number` | Finite floating-point number (no NaN or infinity). | JSON number |
+| `boolean` | `true` or `false`. | JSON boolean |
+| `date` | Calendar date with no time or zone. | `"YYYY-MM-DD"` |
+| `datetime` | An instant. Stored in UTC; input with an offset is converted, and input with **no offset** is read in the user's configured time zone (doc 04's evaluation context). | `"YYYY-MM-DDThh:mm:ssZ"` |
+| `enum` | One of the field's declared `values` (a non-empty list of unique strings). Declaration order is the natural order. | JSON string |
+| `list` | Ordered list whose elements are all of one **scalar** type, given by `of` (a type name, or an inline spec with its own constraints). Lists of lists and lists of maps are not allowed. | JSON array of the element encoding |
+
+There are **no nested maps** and no other collection types. Structured data uses several fields, a relation, or a trait (doc 01); the core `tags` map (above) is the only map-valued field.
+Format types such as `url`, `email` and `duration` are not built in; use `string` with a `pattern` (see `deferred.md`).
+
+### Constraints
+
+| Constraint | Applies to | Meaning |
+|---|---|---|
+| `required` | all | The field must be present (not absent or null). For `string` and `text` it must also be non-empty after trimming. Default `false`. |
+| `default` | all | A literal of the field's type, applied when an item is **created** and the field is absent. Never applied on update, and never overwrites a value. For `list`, a list literal. |
+| `min`, `max` | `integer`, `number`, `date`, `datetime` | Inclusive bounds. |
+| `min_length`, `max_length` | `string`, `text` (characters), `list` (element count) | Inclusive bounds. |
+| `pattern` | `string` | A regular expression that must match the **whole** value. Limited to a portable subset (no lookbehind or backreferences) so every backend and the plugin agree. |
+| `values` | `enum` | Required for `enum`, invalid for any other type. |
+
+An unknown constraint, or one that does not apply to the type, is an error when the definition loads.
+
+### Rules
+
+- **Absent and null.** A field is either present with a value of its type or absent. `null` is treated as absent. To clear a field, remove it. An empty string is a value, not absence.
+- **Names.** `[a-z][a-z0-9_]*`. A field name must not be a reserved key, a relation name, or a trait name (below), and must not contain `.` (dotted names are how trait fields are referenced, doc 01).
+- **Validation.** Done by the plugin on every write, against the implementation's schema, whatever the backend enforces natively. Values changed outside the plugin are validated when sync sees them; an invalid item runs no rules and is reported (doc 05).
+- **Markdown representation.** The `markdown` adapter writes each value in its canonical form. A `string` that would otherwise parse as another YAML type (`yes`, `010`, `2026-12-01`) is written quoted. When a field declared `string` is read as a non-string scalar (a hand edit), the adapter converts it back to its original text and the plugin reports a warning. YAML 1.2 core-schema semantics apply.
+- **Other backends.** Values are exchanged with adapters in the canonical encodings above. A backend with no native type for a field stores the canonical string; the plugin decodes it, so every type round-trips on every backend (doc 03). The plugin does not rely on a backend to sort or compare typed values.
+- **Sort keys and filters** (doc 04) use these type names; `missing` handling and `order` for enums are specified there.
+- **Evolution.** Adding an optional field, or adding an `enum` value, is additive and needs no migration. Renaming or removing a field, changing its `type`, tightening a constraint on existing data, or removing or renaming an `enum` value that items use is a schema change and needs a migration note (doc 02, Implementation versioning).
+
+### Core field types
+
+| Field | Type |
+|---|---|
+| `title` | `string`, required |
+| `name` (Person) | structured map, see Person name |
+| `status` | `enum`: `open`, `done`, `dropped`, plus declared custom values |
+| `completed` | `datetime`, maintained by the plugin |
+| `outcome` | `string` (single line); an implementation may redefine its constraints, not its type |
+| `tags` | `Map<String, String>` |
+| `defaults` | map of core type → implementation id (system-defined shape) |
+| `system` | `boolean` |
+
 ## Status values and categories *(Decided)*
 
 `Task` and `Project` have a `status` with three **core values**: `open`, `done`, `dropped`. An implementation may define **additional values**, each declared as a kind of one core value:
