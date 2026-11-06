@@ -256,14 +256,16 @@ defaults:
 
 ## Install-time setup
 
-The plugin's setup flow runs at install and:
+The install flow (`/brain setup`) is specified in [06 — Install Flow and Triage](06-install-and-triage.md). In short, after one confirmation it:
 
 1. Creates `second-brain/.brain/config.yml` (`version`, the vault `name`, the `archive` adapter choice, and the location of implementation definitions). Vault-level automation, if any, lives beside it in `.brain/automation.yml` (doc 05), created on first use.
-2. Creates the system Archive (`archive:archive`) and the Inbox area item with `defaults` chosen by the user (or built-in starters).
-3. Scaffolds starter implementation definitions for any chosen implementation that does not exist yet.
+2. Copies the built-in starter implementation definitions (`default-*`), including the single `person` implementation.
+3. Creates the system Archive (`archive:archive`) and the Inbox area item with `defaults` pointing at the starters.
+4. Adds `.gitignore` entries for derived state and writes `.brain/manifest.yml` last (doc 02).
 
-**Triage** later moves an item out of the Inbox by assigning it an Area and/or Project and, if the resolved default
-implementation differs, converting it (conversion mechanics TBD).
+**Triage** later moves an item out of the Inbox by assigning it an Area and/or Project and, if the resolved default implementation differs, **converting** it: the item
+keeps its `id` and moves to the other implementation of the same core type, with a deterministic field mapping the user resolves where needed. Capture, triage and conversion are
+specified in doc 06.
 
 ## Versioning and migrations
 

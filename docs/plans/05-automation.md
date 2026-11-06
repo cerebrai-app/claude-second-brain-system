@@ -116,7 +116,7 @@ immediately even for sync-detected events. (Post-MVP non-interactive runs cannot
 |---|---|---|
 | `create` | An item of this implementation is created. | the new envelope |
 | `update` | An item is updated. | before and after envelopes, `changed` field names |
-| `capture` | An item is created in the Inbox area (doc 01), including by triage-by-capture flows. Fires in addition to `create`. | the new envelope |
+| `capture` | An item is created in the Inbox area (doc 01), by `/brain capture` or detected by sync. Fires in addition to `create`. After `/brain capture`, the plugin's built-in *Triage now?* offer (doc 06) is shown **after** the `capture` rules for that event have run, so their proposals appear first; it is plugin behavior, not a rule, and is not shown for sync-detected items. | the new envelope |
 | `archive` / `unarchive` | An item moves into or out of the Archive. | envelope |
 | `relation` | A relation is added to or removed from an item: `on: { relation: blocked_by, added: true }`. | envelope, relation name, ref, added/removed |
 | `schedule` | **Post-MVP.** A cron time elapses (see Scheduling). | `{ scheduled_for, fired_at }` |
@@ -159,12 +159,21 @@ same on every adapter.
 |---|---|
 | `set_field` | Set a field on the triggering item (validated against the schema). |
 | `add_relation` / `remove_relation` | Edit a relation on the triggering item. |
+| `set_relation` | Replace the targets of a single relation on the triggering item (for example a task's `belongs_to`), validated against the allowed targets. Used by triage (doc 06). |
 | `create_item` | Create an item of any type, using the resolved default implementation (doc 01) unless `impl` is given. |
 | `archive` | Archive the triggering item (or a referenced one). |
 | `surface` | Produce a **result set** of items matching a named filter/sort. By default it is shown to the user in the session as a report; with `as:` it is also (or instead, with `show: false`) bound as **input to later actions in the same rule** (below). Read-only. Evaluation is specified in doc 04; a sort used here must have pinned `keys`, and a filter with a pinned interpretation can run unattended; because it needs Claude, a rule using `surface` cannot run unattended unless the needed results are cached and still valid, and is otherwise queued as pending. |
 | `notify` | Emit a message to the user via the session (or a configured notifier hook). |
 
 Built-ins are deterministic and idempotent where possible (`set_field` to the same value is a no-op).
+
+### `convert` (interactive only)
+
+`convert` moves an item to another implementation of the **same core type**, keeping its `id` (mapping, report, apply order and failure handling are in doc 06). It is part of the
+operation set that `claude` proposals and triage can return, but it is **not** available as a standalone rule action, from `hook` results, or in any non-interactive run, because the
+user may need to resolve unmapped, invalid or missing fields in a conversion report before anything is written. As with every `claude` proposal, the exact conversion is shown and
+applied only on approval. It does not fire `create` or `capture` and does not fire `before_delete` for the source delete; the target implementation's rules see an `update`
+(with `changed` including `impl`). Permanent `delete` itself remains unavailable to automation.
 
 ### Using `surface` results as input to later actions
 
@@ -213,7 +222,7 @@ run of a new or changed hook.
 A natural-language instruction carried out by Claude. **Every execution requires user approval before anything is applied.**
 
 1. **Propose.** Claude receives the instruction, the event payload and read-only access to the items it needs, and returns a **proposal**:
-   an ordered list of operations from the same operation set as built-ins (`set_field`, `create_item`, `add_relation`, `archive`, `notify`, ...),
+   an ordered list of operations from the same operation set as built-ins (`set_field`, `set_relation`, `create_item`, `add_relation`, `archive`, `convert`, `notify`, ...),
    plus a short rationale. It cannot write, run commands, or call hooks while proposing.
 2. **Review.** The user sees the rule id, the instruction, the triggering event, the exact operations (as diffs) and the rationale.
 3. **Approve / edit / reject.** Approval applies the operations **exactly as shown** through the normal storage and validation path.
@@ -352,7 +361,7 @@ Pending approval files reference rule ids and are discarded (with a note) if the
 
 ## Next steps
 
-1. Write the install flow and triage mechanics doc (doc 01). Pending approvals, the `capture` trigger and Inbox triage depend on it.
+1. Install flow and triage mechanics are specified in [06 — Install Flow and Triage](06-install-and-triage.md).
 2. Decide whether doc 05 moves from **Draft** to reviewed now that its open questions are resolved.
 3. Implement and test the MVP pieces: structural `match`, built-in actions including `write_body` and `surface ... as:`, the `before_delete` veto, the pending queue and `/brain pending`, and the sync sub-agent with its one-minute `rate_limited` retry and checkpoints.
 4. Post-MVP work (`schedule` triggers, non-interactive runs, sync rate limiting, a run budget) is tracked in [Deferred and Out-of-Scope Items](deferred.md).
