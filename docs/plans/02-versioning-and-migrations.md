@@ -20,6 +20,15 @@ a core version. A bump of the core version is required whenever a change could i
 (field renamed/removed, new required field, changed relation semantics, changed resolution rules). Additive, optional
 changes do not bump it.
 
+## Release versioning: no major bump before 1.0.0 *(Decided)*
+
+The plugin is released as semver, and **the major version stays `0` until the owner releases `1.0.0` manually.** Neither Claude nor automation increments the major version number, and nobody tags or publishes `1.0.0` on the owner's behalf.
+
+- Until then, breaking changes bump the **minor** version (`0.3.0` to `0.4.0`) and everything else bumps the **patch** version. This is the usual semver reading of `0.y.z`.
+- A suggestion of `major` from the semver bump advisor (`.github/workflows/semver-bump-advisor.md`) before 1.0.0 is advisory only. Apply it as a minor bump, and say in the pull request that the owner decides when the project is ready for 1.0.0.
+- This applies to every version that is released together: the plugin manifest (`plugins/brain/.claude-plugin/plugin.json`) and the marketplace entry (`.claude-plugin/marketplace.json`), which are kept in step.
+- It does not apply to the **core version** (a plain integer, above), the `brainctl` helper version, or an implementation's `version`. Those are separate counters and may rise whenever their own rules say so.
+
 ## Manifest: `second-brain/.brain/manifest.yml`
 
 ```yaml
