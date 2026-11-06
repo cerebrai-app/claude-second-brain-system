@@ -163,6 +163,15 @@ def plan_adoption(vault, type_, impl_name, relpath, parsed):
     return additions, problems
 
 
+def _with_id(event, before_revision):
+    """Give an event a stable `id`: a hash of the transition (ref, trigger, revision before and after, relation), so the same change
+    detected again gets the same id and `(rule id, event id)` can be recorded to stop a re-delivered event applying twice."""
+    import hashlib
+    key = "|".join(str(x) for x in (event["ref"], event["trigger"], before_revision, event["revision"], event.get("relation", "")))
+    event["id"] = "ev_" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+    return {"id": event["id"], **{k: v for k, v in event.items() if k != "id"}}
+
+
 COMPLETABLE = ("slug", "title", "name", "status", "created", "updated")
 
 
@@ -307,23 +316,25 @@ def sync(vault, adopt=True, dry_run=False, refresh=False):
             origin = f"external/{item.type}/{item.impl}"
             base = {"ref": ref, "type": item.type, "impl": item.impl, "origin": origin, "depth": 0, "detected_at": detected,
                     "revision": new_snap["revision"], "path": item.relpath}
+            before_rev = (was or {}).get("snapshot", {}).get("revision")
+            emit = lambda trigger, **extra: events.append(_with_id(dict(base, trigger=trigger, **extra), before_rev))
             if was is None:
-                events.append(dict(base, trigger="create", after=new_snap))
+                emit("create", after=new_snap)
                 if in_inbox(item):
-                    events.append(dict(base, trigger="capture", after=new_snap))
+                    emit("capture", after=new_snap)
                 continue
             old_snap = was["snapshot"]
             if was["archived"] != item.archived:
-                events.append(dict(base, trigger="archive" if item.archived else "unarchive", before=old_snap, after=new_snap))
+                emit("archive" if item.archived else "unarchive", before=old_snap, after=new_snap)
                 continue
             if old_snap.get("revision") != new_snap["revision"] or was["impl"] != item.impl:
                 changed = _changed(old_snap, new_snap, was["impl"], item.impl)
-                events.append(dict(base, trigger="update", changed=changed, before=old_snap, after=new_snap))
+                emit("update", changed=changed, before=old_snap, after=new_snap)
                 for name in sorted(set(old_snap["relations"]) | set(new_snap["relations"])):
                     before = set(old_snap["relations"].get(name, []))
                     after = set(new_snap["relations"].get(name, []))
                     if before != after:
-                        events.append(dict(base, trigger="relation", relation=name, added=sorted(after - before), removed=sorted(before - after)))
+                        emit("relation", relation=name, added=sorted(after - before), removed=sorted(before - after))
         for ref, was in old.items():
             if ref not in current and (ref.split(":", 1)[0], was["impl"]) not in unreadable:
                 report["missing"].append(ref)

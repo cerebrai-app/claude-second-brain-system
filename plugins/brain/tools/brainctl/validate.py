@@ -44,6 +44,7 @@ def validate(vault, ref=None):
     _check_items(vault, scan, findings)
     _check_automation(vault, findings)
     _check_conversions(vault, findings)
+    _check_log(vault, findings)
     _check_gitignore(vault, findings)
     _check_workspace(vault, findings)
     if ref:
@@ -677,6 +678,38 @@ def _check_conversions(vault, f):
             f.warn("conversion-marker", subject, "not a valid conversion marker (" + "; ".join(problems) + ")")
         ref = marker.get("ref") if isinstance(marker, dict) else None
         f.warn("half-converted", subject, f"the conversion of {ref or 'an item'} did not finish; finish it to remove the duplicate item")
+
+
+LOG_OUTCOMES = ("ok", "skipped", "queued", "approved-applied", "rejected", "expired", "failed")
+LOG_TAIL = 200
+
+
+def _check_log(vault, f):
+    """The last lines of .brain/automation/log.jsonl: valid JSON objects with an `outcome` from the fixed vocabulary
+    (docs/plans/05, Logging). `skipped` needs a `reason`, `failed` an `error`."""
+    path = vault.path(".brain/automation/log.jsonl")
+    if not os.path.isfile(path):
+        return
+    with open(path, encoding="utf-8") as fh:
+        lines = fh.read().splitlines()
+    subject = ".brain/automation/log.jsonl"
+    start = max(0, len(lines) - LOG_TAIL)
+    for number, line in enumerate(lines[start:], start + 1):
+        if not line.strip():
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            f.warn("log-line", subject, f"line {number} is not valid JSON")
+            continue
+        if not isinstance(entry, dict):
+            f.warn("log-line", subject, f"line {number} is not a JSON object")
+        elif entry.get("outcome") not in LOG_OUTCOMES:
+            f.warn("log-outcome", subject, f"line {number}: outcome {entry.get('outcome')!r} is not one of {', '.join(LOG_OUTCOMES)}")
+        elif entry["outcome"] == "skipped" and not entry.get("reason"):
+            f.warn("log-outcome", subject, f"line {number}: a skipped run needs a `reason` (for example exists)")
+        elif entry["outcome"] == "failed" and not entry.get("error"):
+            f.warn("log-outcome", subject, f"line {number}: a failed run needs an `error`")
 
 
 def _marker_problems(marker):

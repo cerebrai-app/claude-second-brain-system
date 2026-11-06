@@ -99,8 +99,16 @@ def test_approve_records_the_hash_and_keeps_the_registry_comments(b, capsys):
 
 
 def test_approve_needs_exactly_one_target_and_a_registered_script(b, capsys):
-    assert cli.main(["--vault", b.root, "approve"]) == 2
-    assert cli.main(["--vault", b.root, "approve", "nope"]) == 2
+    assert cli.main(["--vault", b.root, "approve", "--by", "me"]) == 2
+    assert cli.main(["--vault", b.root, "approve", "nope", "--by", "me"]) == 2
+
+
+def test_approve_requires_a_named_approver(b, capsys):
+    b.write(".brain/python/scripts/a.py", "print(1)\n")
+    b.write(".brain/python/registry.yml", "scripts:\n  - { name: a, path: scripts/a.py }\n")
+    assert cli.main(["--vault", b.root, "approve", "a"]) == 2
+    assert cli.main(["--vault", b.root, "approve", "a", "--by", "  "]) == 2
+    assert "approved:" not in b.read(".brain/python/registry.yml")
 
 
 def test_not_a_vault_exits_two(tmp_path):

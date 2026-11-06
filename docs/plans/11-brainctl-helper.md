@@ -1,6 +1,6 @@
 # 11 — The `brainctl` Helper
 
-Status: **Draft, partly implemented** (`validate`, `sync`, `read`, `list`, `id`, `slug`, `approve-hash`, `approve`, `render`; version 0.2.1) · Depends on: [03](03-storage-contract.md), [05](05-automation.md), [07](07-python-workspace.md), [08](08-core-types.md) · Origin: the first rehearsal ([10](10-plugin-skills.md), findings 1 and 2)
+Status: **Draft, partly implemented** (`validate`, `sync`, `read`, `list`, `id`, `slug`, `approve-hash`, `approve`, `render`; version 0.2.2) · Depends on: [03](03-storage-contract.md), [05](05-automation.md), [07](07-python-workspace.md), [08](08-core-types.md) · Origin: the first rehearsal ([10](10-plugin-skills.md), findings 1 and 2)
 
 ## Goal
 
@@ -36,7 +36,7 @@ adopting hand-written files, hashing a script for approval. In the rehearsal, do
 | `sync` | Detect: scan all bindings and the Archive, match by ref across bindings, diff against the seen state, **adopt** hand-written files and **complete** the identity fields (slug, title, status, created, updated) of items that have an id but lack them (doc 05), and return the sync report and ordered event list. Updates the seen state, except for externally changed items that fail validation (held back so they are reported again). `--no-adopt` reports without editing files; `--dry-run` writes nothing; `--refresh` accepts the current state as seen (no events, no adoption), for use after the plugin's own writes. Script-adapter bindings are read through `client.py` (doc 12, Client); one that cannot be read is reported as incomplete and its items are never reported as missing. The one-minute `rate_limited` retry applies to script calls. |
 | `render <template> [--vars JSON] [--var N=V] [--now ISO]` / `render --json <value>` | Resolve `{{ today }}`, `{{ now }}` and bound variables with the filters `checklist`, `bullets`, `refs`, `table` (doc 05, Template variables). `--json` resolves every string in a JSON value. Exit 2 on an unknown variable or filter. `templates.py`; `validate` uses the same parser (`rule-template`). |
 | `approve-hash <script>` | The workspace approval hash (below). |
-| `approve <script> \| --all [--by WHO]` | Record the current hash as the approval in `registry.yml` (`approved: {sha256, at, by}`), keeping the file's comments. `--all` covers every script that is unapproved or changed. The skill shows the user the diff first; the command only records the answer. `by` defaults to git `user.email`. |
+| `approve <script> \| --all --by WHO` | Record the current hash as the approval in `registry.yml` (`approved: {sha256, at, by}`), keeping the file's comments. `--all` covers every script that is unapproved or changed. The skill shows the user the diff first; the command only records the answer. `--by` is required and names the person who approved (their name or email); the helper refuses to guess it from the git identity, which may be a tool's. |
 | `index rebuild` | Rebuild the derived refs index by scanning frontmatter ids. |
 
 Script adapters (doc 03) are called by the same commands through their JSON protocol, so the skills have one interface whatever the backend.
@@ -80,15 +80,7 @@ capture:
   "entries": { "task:01M6...": { "revision": "<hash>", "fields": { }, "relations": { } } } }
 ```
 
-**Pending entry** `.brain/automation/pending/<timestamp>-<type>-<impl-id>-<rule-id>.json` (git-ignored)
-
-```json
-{ "rule": "note/default-note/suggest-tags",
-  "event": { "trigger": "capture", "ref": "note:01M6...", "origin": "external/note/default-note",
-             "depth": 0, "detected_at": "2026-11-06T01:26:26Z", "revision": "<hash>" },
-  "proposal": { "rationale": "...", "operations": [ { "op": "set_field", "ref": "note:01M6...", "field": "tags", "value": { } } ] },
-  "created": "2026-11-06T01:26:34Z" }
-```
+**Pending entry** `.brain/automation/pending/<timestamp>-<type>-<impl-id>-<rule-id>.json` (git-ignored): the shape is in the automation reference (Pending entry file). Its `event` is a sync event, including the stable `id` (`ev_` and a hash of ref, trigger, revision before and after, relation).
 
 **Half-converted marker** `.brain/conversions/<type>-<id>.json` (git-ignored)
 
@@ -97,7 +89,7 @@ capture:
   "to": { "impl": "gtd-task", "path": "tasks/gtd/draft-q4-plan.md" }, "at": "2026-11-06T01:26:00Z" }
 ```
 
-**Log line** `.brain/automation/log.jsonl`: `{ "ts", "rule", "trigger", "event", "actions", "outcome", "duration_ms" }`, one per rule run, plus one per helper write (`"command"`, `"ref"`).
+**Log line** `.brain/automation/log.jsonl`: `{ "ts", "rule", "trigger", "event", "actions", "outcome", "duration_ms" }`, one per rule run, plus one per helper write (`"command"`, `"ref"`). `outcome` uses the fixed vocabulary in doc 05 (Logging).
 
 ## Package layout and tests
 

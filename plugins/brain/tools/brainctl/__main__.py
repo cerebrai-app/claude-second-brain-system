@@ -155,7 +155,10 @@ def cmd_approve(args):
     if bool(args.script) == bool(args.all):
         print("give a script name or --all (not both)", file=sys.stderr)
         return EXIT_USAGE
-    by = args.by or util.git_email(vault.root) or "unknown"
+    by = (args.by or "").strip()
+    if not by:
+        print("--by is required: name the person who approved (their name or email), not the tool or the git identity", file=sys.stderr)
+        return EXIT_USAGE
     try:
         done = approval.approve(vault.path(".brain/python"), None if args.all else [args.script], by, util.now_iso())
     except (approval.ApprovalError, OSError) as exc:
@@ -246,7 +249,7 @@ def build_parser():
     s = sub.add_parser("approve", help="record the current approval hash of a registered script, or of every unapproved or changed one (--all); show the user the diff first")
     s.add_argument("script", nargs="?")
     s.add_argument("--all", action="store_true")
-    s.add_argument("--by", help="who approved (default: git user.email)")
+    s.add_argument("--by", help="who approved: the user's name or email (required)")
     s.set_defaults(fn=cmd_approve)
     s = sub.add_parser("render", help="resolve {{ today }}, {{ now }} and bound variables in a template string, or in the strings of a JSON value (--json)")
     s.add_argument("template", nargs="?", help="the template (with --json: a JSON value; omit to read it from stdin)")

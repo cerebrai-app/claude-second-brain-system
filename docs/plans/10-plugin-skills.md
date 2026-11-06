@@ -116,10 +116,10 @@ Wiped `devinsba/second-brain` and ran steps 1 to 10 headless through the install
 Wiped the scratch vault and reran steps 1 to 10 headless on brainctl 0.2.0 (then 0.2.1). All steps behaved as expected and the vault ends with 0 errors and 0 warnings. Confirmed fixed: the model found the `defaults` format and the conversion marker shape from the references alone; timestamps and `today` came from `brainctl render`; the journal rule used `{{ today }}` with no hand-resolved placeholder and ran once, then skipped; the script was approved and re-approved with `brainctl approve` / `approve --all`; the pending entry followed the documented shape. Findings:
 
 1. **Fixed: `created` taken from a deleted file's history.** Adopting an untracked file at a path that once held another (committed, since deleted) file used that old file's first commit time. Adoption now uses git history only for a tracked file (0.2.1).
-2. **Sync events have no `id`.** The pending-entry shape asks for `event.id`; the model composed `<ref>@<detected_at>/capture`. Give events a stable `id` in the sync output, or change the shape.
-3. **`approve` records `by` from git `user.email`,** which was `noreply@anthropic.com` in the headless session. Consider recording who the user is (ask, or require `--by`).
+2. **Fixed: sync events have no `id`.** Events now carry a stable `id` (a hash of the transition), documented in the automation reference (0.2.2).
+3. **Fixed: `approve` recorded `by` from git `user.email`** (`noreply@anthropic.com` in a headless session). `--by` is now required.
 4. **Still hand-written:** every item write is the model editing files, because `brainctl create`/`update`/`convert` do not exist. The templates and timestamps are now deterministic, the writes are not.
-5. **Run outcomes in the log** are free text (`ok` vs `skipped: exists`); pin the vocabulary.
+5. **Fixed: run outcomes in the log were free text.** The vocabulary is fixed (doc 05, Logging) and `validate` checks it.
 
 ## Next steps
 

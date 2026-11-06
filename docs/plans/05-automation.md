@@ -266,7 +266,7 @@ There is no "always allow" mode, and no way to pre-approve a rule's shape or "sa
 - **Failure:** a failed action logs an error, stops that rule, and does not roll back already-applied earlier actions of the same rule
   (they are individually valid operations). The user sees failures in the session and in the log.
 - **Logging:** each rule run appends a JSON line to `.brain/automation/log.jsonl` (git-ignored): rule id, trigger, event id, actions,
-  outcome, duration. This also feeds the latency measurement in doc 03.
+  outcome, duration. This also feeds the latency measurement in doc 03. `outcome` is one of: `ok` (the actions ran), `skipped` (needs a `reason`, for example `exists` or `condition`), `queued` (a `claude` proposal was written to the pending queue), `approved-applied` (a pending proposal was approved and applied), `rejected`, `expired`, and `failed` (needs an `error`). `validate` warns about a line outside this vocabulary (`log-outcome`, `log-line`).
 
 ### Detecting changes made outside the plugin
 

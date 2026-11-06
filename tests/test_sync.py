@@ -344,3 +344,19 @@ def test_created_comes_from_git_history_only_for_a_tracked_file(b):
     b.write("notes/old.md", "# Old again\n")                                  # untracked, at a path that once held another file
     run(b)
     assert util.ParsedFile(b.read("notes/old.md")).front["created"] != old
+
+
+def test_events_carry_a_stable_id_derived_from_the_transition(b):
+    run(b)
+    ident, slug = b.item("note", "default-note", "notes", "One")
+    first = run(b, dry_run=True)["events"]
+    again = run(b, dry_run=True)["events"]
+    assert [e["trigger"] for e in first] == ["create", "capture"]
+    assert all(e["id"].startswith("ev_") and len(e["id"]) == 19 for e in first)
+    assert first[0]["id"] != first[1]["id"]                                       # create and capture differ
+    assert [e["id"] for e in first] == [e["id"] for e in again]                   # the same change gives the same ids (re-delivery is detectable)
+    assert list(first[0])[0] == "id"
+    run(b)
+    b.write(f"notes/{slug}.md", b.read(f"notes/{slug}.md").replace("title: One", "title: Two"))
+    update = [e for e in run(b)["events"] if e["trigger"] == "update"][0]
+    assert update["ref"] == f"note:{ident}" and update["id"] not in {e["id"] for e in first}

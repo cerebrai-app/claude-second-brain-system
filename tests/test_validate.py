@@ -519,3 +519,18 @@ def test_conversion_marker_shape(b):
     found = run(b)
     assert has(found, "half-converted", "warning", "task-good") and not has(found, "conversion-marker", subject="task-good")
     assert has(found, "conversion-marker", "warning", "task-bad")
+
+
+def test_log_lines_use_the_outcome_vocabulary(b):
+    log = ".brain/automation/log.jsonl"
+    b.write(log, "\n".join([
+        '{"ts": "2026-11-06T00:00:00Z", "rule": "vault/r", "outcome": "ok"}',
+        '{"ts": "2026-11-06T00:00:01Z", "rule": "vault/r", "outcome": "skipped", "reason": "exists"}',
+        '{"ts": "2026-11-06T00:00:02Z", "rule": "vault/r", "outcome": "queued"}',
+    ]) + "\n")
+    assert not [f for f in run(b) if f["code"].startswith("log-")]
+    b.write(log, "\n".join([
+        '{"outcome": "done"}', '{"outcome": "skipped"}', '{"outcome": "failed"}', 'not json', '[1]',
+    ]) + "\n")
+    found = [f for f in run(b) if f["code"].startswith("log-")]
+    assert sorted(f["code"] for f in found) == ["log-line", "log-line", "log-outcome", "log-outcome", "log-outcome"]

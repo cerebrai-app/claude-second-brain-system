@@ -165,15 +165,6 @@ def is_git_repo(root):
     return os.path.isdir(os.path.join(root, ".git")) or os.path.isfile(os.path.join(root, ".git"))
 
 
-def git_email(root):
-    """The configured git user.email, or None."""
-    try:
-        r = subprocess.run(["git", "config", "user.email"], cwd=root, capture_output=True, text=True)
-    except OSError:
-        return None
-    return r.stdout.strip() or None if r.returncode == 0 else None
-
-
 def git_ignored(root, relpath):
     """True/False whether git would ignore `relpath`; None when git is unavailable or the root is not a repository."""
     if not is_git_repo(root):

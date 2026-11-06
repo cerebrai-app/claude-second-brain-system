@@ -36,7 +36,7 @@ There is no always-allow mode and no pre-approved "shape". Approval is per propo
 
 ### Pending entry file
 
-The main session writes the entry when it dispatches the event list that `brainctl sync` returned (`sync` itself only emits events; it never writes proposals). One JSON file per proposal:
+Every event in `brainctl sync`'s list has a stable `id` (`ev_` and 16 hex digits, a hash of the ref, trigger, revision before and after and relation), so the same change detected again has the same id. Copy it into `event.id`; never make one up. The main session writes the entry when it dispatches the event list that `brainctl sync` returned (`sync` itself only emits events; it never writes proposals). One JSON file per proposal:
 
 ```json
 {
@@ -45,7 +45,7 @@ The main session writes the entry when it dispatches the event list that `brainc
   "created": "2026-11-06T03:47:30Z",
   "expires": "2026-11-20T03:47:30Z",
   "rule": { "type": "note", "impl": "default-note", "id": "propose-topic-tag" },
-  "event": { "id": "<event id>", "trigger": "capture", "ref": "note:<id>", "origin": "external/note/default-note", "depth": 0 },
+  "event": { "id": "ev_<16 hex>", "trigger": "capture", "ref": "note:<id>", "origin": "external/note/default-note", "depth": 0 },
   "instruction": "<the rule's instruction text>",
   "revision": "<git blob hash of the triggering item when the proposal was made>",
   "rationale": "<why>",
@@ -74,4 +74,4 @@ Example: `unless_exists: { type: note, impl: journal, where: { title: "{{ today 
 
 ## Logging
 
-Append one JSON line per rule run to `.brain/automation/log.jsonl` (rule id, trigger, event id, actions, outcome, duration). Record `(rule id, event id)` so a re-delivered event does not apply twice.
+Append one JSON line per rule run to `.brain/automation/log.jsonl` (`ts`, `rule`, `trigger`, `event` (the event `id`), `actions`, `outcome`, `duration_ms`). `outcome` is one of: `ok` (the actions ran), `skipped` (needs a `reason`, for example `exists` or `condition`), `queued` (a `claude` proposal was written to the pending queue), `approved-applied` (a pending proposal was approved and applied), `rejected`, `expired`, and `failed` (needs an `error`). `validate` warns about a line outside this vocabulary (`log-outcome`, `log-line`). Record `(rule id, event id)` so a re-delivered event does not apply twice.
