@@ -15,6 +15,7 @@ Designed or reserved in the specs, deliberately not built in the first release.
 | Bulk triage (apply one Area/Project to several selected items in one approval) | Triage is one item at a time. | 06 | |
 | Windows support for the Python workspace | POSIX only (Linux, macOS). | 07 | |
 | Running the Python workspace in a Docker container | The workspace runs in a local environment managed by the user's package manager (doc 07). | 07 | |
+| Built-in format field types (`url`, `email`, `duration`) and nested map or list-of-map fields | Use `string` with a `pattern`, several fields, a relation or a trait. | 08 | |
 | `schedule` triggers and session-start catch-up | `on: schedule` is rejected at load time; time-based work runs via `manual` rules (`/brain run ...`). | 05 | Rule shape is reserved so it can be added without changes. Includes the open question of how "due" is decided when many schedule rules exist. |
 | Non-interactive runs (cron, CI, `claude -p "/brain run-due"`) | Every run happens inside an interactive session. | 05 | Would reuse the pending-approval queue for rules needing Claude or approval, and the `when` condition could then not be judged. |
 | Sync self rate limiting (token bucket, `describe`-supplied limits, `.brain/config.yml` overrides, backoff with jitter, honoring `retry_after`) | No pacing. One retry after a minute on `rate_limited`; a second one in a row fails the binding for the run. `unavailable` gets no retry. | 05 | Can be added without changing the sync report or checkpoints. |

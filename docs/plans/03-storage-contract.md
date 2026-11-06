@@ -91,7 +91,7 @@ All keys optional, all combined with AND. Adapters apply as much as they can nat
 ```
 
 The plugin adapts to capabilities (e.g. refuses to bind an implementation with `body` content to an adapter with
-`supports_body: false`, or warns when `preserves_unknown_fields` is false and the implementation defines extra fields). `tags` reports how the backend stores the core `tags` map (doc 08): `"map"` for native key/value tags, or `"labels"` for names only, in which case the implementation must name a side field for the values (`storage.tag_values_field`) or it is refused at binding. An implementation whose items can carry traits (doc 01) is refused on an adapter with `supports_traits: false`: the adapter must persist the `traits` list and the nested `<trait>.<field>` values.
+`supports_body: false`, or warns when `preserves_unknown_fields` is false and the implementation defines extra fields). Field values are exchanged in their canonical encodings (doc 08, Field types); a backend with no native type for a field stores the canonical string, so no schema is refused for its types. `tags` reports how the backend stores the core `tags` map (doc 08): `"map"` for native key/value tags, or `"labels"` for names only, in which case the implementation must name a side field for the values (`storage.tag_values_field`) or it is refused at binding. An implementation whose items can carry traits (doc 01) is refused on an adapter with `supports_traits: false`: the adapter must persist the `traits` list and the nested `<trait>.<field>` values.
 
 ## Built-in `markdown` adapter
 
