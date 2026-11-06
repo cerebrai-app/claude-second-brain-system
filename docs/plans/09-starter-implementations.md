@@ -51,11 +51,11 @@ Everything else is defined somewhere else:
 
 1. ~~Field type vocabulary~~ — resolved: specified in [08 — Core Types](08-core-types.md) (Field types). Starters need none of it; it applies to fields users add.
 2. **System-provided views and rules have no home yet.** With no sorts, filters or automation in the starters, anything a vault should have out of the box (a generic "recently updated" view, a "today" view) must come from the plugin's system skills. Where they are defined and how they are named so users and rules can reference them (doc 05 `surface`, doc 04) is not specified.
-3. **System skills and instructions** that carry the core semantics are not written yet (what a blocked task is, how the Inbox and triage behave, how to work with each core type).
+3. ~~System skills and instructions~~ — written: see [10 — Plugin Skills](10-plugin-skills.md). The `core` skill carries the semantics removed from the starters.
 
 ## Next steps
 
 1. ~~Specify the field type vocabulary~~ — done (doc 08).
 2. Specify system-provided views and rules (gap 2) in docs 04 and 05.
-3. Write the system skills and instructions that carry the core semantics (gap 3).
+3. ~~Write the system skills and instructions~~ — done (doc 10).
 4. Add the starters to the plugin's install flow implementation, copying them in step 2 of setup.

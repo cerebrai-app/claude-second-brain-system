@@ -6,13 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A Claude Code **plugin marketplace**: a thin JSON layer (`.claude-plugin/marketplace.json`) that points at one or more plugins, each living under `plugins/<name>/` with its own `.claude-plugin/plugin.json` manifest. There is no build system, package manager, or test suite — the "code" is marketplace/plugin metadata plus whatever skills, commands, agents, or hooks each plugin defines.
 
-Currently there is a single plugin, `brain` (`plugins/brain/`), intended to become a "Second Brain System" built around Claude Code. It is still a skeleton: `plugins/brain/skills/` exists but is empty (only a `.gitkeep`).
+Currently there is a single plugin, `brain` (`plugins/brain/`), intended to become a "Second Brain System" built around Claude Code. Its design is in `docs/plans/`; its skills (`plugins/brain/skills/`) and starter implementations (`plugins/brain/starters/`) are first drafts that have not been exercised against a real vault yet.
 
 ## Architecture
 
 - `.claude-plugin/marketplace.json` — the marketplace manifest. Lists each plugin's `name`, `source` (relative path), `description`, and `version`. Adding a new plugin means adding both the directory under `plugins/` and an entry here.
 - `plugins/<plugin-name>/.claude-plugin/plugin.json` — per-plugin manifest (`name`, `description`, `version`, `author`). This is what Claude Code reads when a user runs `/plugin install <plugin-name>@<marketplace-name>`.
-- `plugins/<plugin-name>/skills/` — where that plugin's skills live (one subdirectory per skill, each with a `SKILL.md`). A plugin can also define `commands/`, `agents/`, or `hooks/` directories following the same convention once those are introduced.
+- `plugins/<plugin-name>/skills/` — where that plugin's skills live (one subdirectory per skill, each with a `SKILL.md`). The `brain` plugin's skills are listed in `docs/plans/10-plugin-skills.md`; they restate the design docs, so update the matching skill or `core/references/` file whenever a design doc changes. A plugin can also define `commands/`, `agents/`, or `hooks/` directories following the same convention once those are introduced.
 - `plugins/brain/starters/<type>/default-<type>.md` — the built-in starter implementation definitions that `/brain setup` copies into a vault's `.brain/impls/`. Design docs for the whole system are in `docs/plans/` (see `docs/plans/09-starter-implementations.md`).
 - Keep plugin and marketplace `version` fields in sync when bumping a plugin's version — the marketplace entry is not derived automatically from the plugin manifest.
 
