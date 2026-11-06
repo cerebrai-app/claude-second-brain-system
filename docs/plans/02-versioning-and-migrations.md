@@ -26,8 +26,8 @@ The plugin is released as semver, and **the major version stays `0` until the ow
 
 - Until then, breaking changes bump the **minor** version (`0.3.0` to `0.4.0`) and everything else bumps the **patch** version. This is the usual semver reading of `0.y.z`.
 - A suggestion of `major` from the semver bump advisor (`.github/workflows/semver-bump-advisor.md`) before 1.0.0 is advisory only. Apply it as a minor bump, and say in the pull request that the owner decides when the project is ready for 1.0.0.
-- This applies to every version that is released together: the plugin manifest (`plugins/brain/.claude-plugin/plugin.json`) and the marketplace entry (`.claude-plugin/marketplace.json`), which are kept in step.
-- It does not apply to the **core version** (a plain integer, above), the `brainctl` helper version, or an implementation's `version`. Those are separate counters and may rise whenever their own rules say so.
+- **Everything that ships moves to 1.0.0 at the same time.** That is the plugin manifest (`plugins/brain/.claude-plugin/plugin.json`, which versions the skills: they carry no version of their own), the marketplace entry (`.claude-plugin/marketplace.json`), and the `brainctl` helper (`__version__` in `plugins/brain/tools/brainctl/__init__.py`, recorded in a vault's manifest as `helper_version`). The owner makes that change in one release. Until then none of them has a major number above `0`, and their minor and patch numbers may differ (the plugin manifest and the marketplace entry are kept equal; the helper has its own counter).
+- It does not apply to the **core version** (a plain integer, above) or an implementation's `version`. Those are separate counters and may rise whenever their own rules say so; they are not part of the 1.0.0 release.
 
 ## Manifest: `second-brain/.brain/manifest.yml`
 
