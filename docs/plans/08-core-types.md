@@ -22,11 +22,22 @@ Per the storage contract (doc 03), an item has envelope-level properties and `fi
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `title` | string | yes (not Person) | Non-empty after trimming. Person uses `name` instead. |
-| `tags` | list of strings | no (default `[]`) | Free-form labels *(Decided: on all five extensible types; not on `Archive`)*. |
+| `tags` | map: tag name → value | no (default `{}`) | Free-form labels with optional values *(Decided: on all five extensible types; not on `Archive`)*. See Tags. |
 | `body` | markdown string | no (Note: present, may be empty) | Envelope-level. Adapters may not support it (`supports_body`, doc 03). |
 
-**Tags.** Normalized on write: trimmed, lowercased, no commas or newlines, no duplicates; order is preserved. Tags are unvalidated labels with no schema. They are not traits (doc 01, Person only; traits add
-namespaced, validated fields) and not relations (links to other items). Filters, sorts and rule `match` can test tags.
+**Tags** *(Decided)*. A tag has a **name** and a **value**:
+
+```yaml
+tags:
+  urgent: true                    # a bare tag: value true
+  work/acme: { stage: proposal }  # names may contain "/" and "."
+  review.due: 2026-12-01          # the value can be any YAML value
+```
+
+- **Names** are non-empty strings, trimmed and lowercased on write, with no whitespace or control characters. `.` and `/` are allowed (and any other character, quoted in YAML as needed). Names are unique per item (case-insensitive) and keep their order. `/` and `.` are conventions for grouping, not syntax: **names are opaque**, with no built-in hierarchy semantics. Natural-language filters (doc 04) and rules can reason about them (for example "tags under `work/`").
+- **Values** can be anything YAML can express (scalar, list or map) and are not validated or normalized. A bare tag has the value `true`.
+- **Shorthand:** a list of names is accepted on input (`tags: [urgent, work/acme]`) and normalized to the map form with value `true`.
+- Tags are unvalidated labels with no schema. They are not traits (doc 01, Person only; traits add namespaced, validated fields) and not relations (links to other items). Filters, sorts and rule `match` can test a tag's presence, name and value.
 
 ## Status values and categories *(Decided)*
 
@@ -45,6 +56,16 @@ status_values:
 - A custom value must map to exactly one core value, and must not equal a core value or another custom value. Setup and validation reject the definition otherwise.
 - Changing a value's mapping, or removing a value that items use, is a schema change that needs a migration note (doc 02).
 - *Not covered by this decision, my call:* `Project` uses the same three core values and the same mapping rule, so an `on_hold` project is just a custom value that maps to `open`.
+
+## Completion timestamp *(Decided)*
+
+`Task` and `Project` have a core `completed` timestamp (UTC ISO 8601), maintained by the plugin and never set directly by users or rules:
+
+- Set to the time of the write when the **category** of `status` changes from `open` to `done` or `dropped`.
+- Cleared when the category returns to `open`.
+- Not changed by edits that keep the category (for example `done` to `dropped`), or by status changes within `open`.
+- **External changes:** the plugin sets it only on its own writes. If a backend reports a completion time, the adapter maps it to `completed`; otherwise an item completed outside the plugin has no
+  `completed` until the next plugin write to it (sync, doc 05, does not write to items). Filters should treat a missing `completed` on a `done` item as unknown.
 
 ## Core types
 
@@ -66,6 +87,7 @@ Actionable unit with a state.
 |---|---|---|---|---|
 | `title` | field | required | | |
 | `status` | field | required | `open` \| `done` \| `dropped` (+ custom, mapped) | Default `open`. |
+| `completed` | field | set by the plugin | timestamp | See Completion timestamp. |
 | `belongs_to` | relation | 0 or 1 | Project or Area | The placement relation (doc 06). |
 | `assigned_to` | relation | any number | Person | |
 | `blocked_by` | relation | any number | Task | A task is **blocked** when at least one blocker's category is `open`. A cycle in `blocked_by` is a validation warning, not an error. |
@@ -78,6 +100,7 @@ Outcome with an end state.
 |---|---|---|---|---|
 | `title` | field | required | | |
 | `status` | field | required | `open` \| `done` \| `dropped` (+ custom, mapped) | Default `open`. |
+| `completed` | field | set by the plugin | timestamp | See Completion timestamp. |
 | `outcome` | field | **optional** *(Decided)* | string | An implementation may make it required for itself. |
 | `area` | relation | 0 or 1 | Area | The placement relation (doc 06). |
 | `owner` | relation | 0 or 1 | Person | |
@@ -100,9 +123,24 @@ Someone you interact with. **Top-level** (not placed, never in the Inbox, doc 01
 
 | Name | Kind | Cardinality | Targets | Notes |
 |---|---|---|---|---|
-| `name` | field | required | | The person's display name. Non-empty after trimming. |
+| `name` | field (structured) | required | map | See Person name. At least one part must be non-empty. |
 | *named relations* | relation | any number each | any item | Relation names are chosen by the implementation or the user, for example `works_with`, `owner_of`. See Named relations. |
 | `traits` and trait fields | field | optional | | Doc 01. |
+
+**Person name** *(Decided: structured)*. `name` is a map of parts, all optional strings, at least one non-empty after trimming:
+
+```yaml
+name:
+  given: Alex
+  middle: J.
+  family: Rivera
+  nickname: Lex
+  display: Alex Rivera        # optional explicit display name
+```
+
+- **Display name** (used wherever the plugin needs one): `display` if set, otherwise `given`, `middle` and `family` joined by spaces, otherwise `nickname`.
+- **Sorting** by default: `family`, then `given`, then the display name. Mononyms are fine (only `given`, or only `display`).
+- An implementation may add further parts (for example `suffix`); unknown parts are preserved. Parts are not reordered or reformatted by the plugin.
 
 ### `Archive` (not extensible)
 
@@ -130,7 +168,7 @@ A person's relation names are not fixed by the core. Rules for a name:
 
 These names cannot be used as an implementation field, a relation name, or a trait name:
 
-`id`, `type`, `impl`, `created`, `updated`, `revision`, `archive`, `archived_at`, `body`, `title`, `name`, `tags`, `status`, `outcome`, `defaults`, `system`, `traits`, `contains`, `about`, `links`,
+`id`, `type`, `impl`, `created`, `updated`, `revision`, `archive`, `archived_at`, `body`, `title`, `name`, `tags`, `status`, `completed`, `outcome`, `defaults`, `system`, `traits`, `contains`, `about`, `links`,
 `belongs_to`, `assigned_to`, `blocked_by`, `area`, `owner`, `parent`.
 
 Where a name is a core name for one type (for example `owner` on Project) it is reserved across all types to keep names uniform in cross-type filters and rules.
@@ -146,19 +184,22 @@ Where a name is a core name for one type (for example `owner` on Project) it is 
 | `Task.blocked_by` cycle | warning |
 | Dangling relation target | reported by the validation pass (doc 03), not by the write |
 | Relation to an archived item | warning |
-| `tags` not normalized | fixed silently on write |
+| `tags` names not normalized (case, whitespace), or a list shorthand | fixed silently on write |
+| `completed` set or changed directly | error (maintained by the plugin) |
+| Person `name` not a map, or all parts empty | error |
 | Reserved key used as an implementation name | error at definition load |
 
 ## Open questions
 
-1. Tag syntax: should `/` be allowed for hierarchical tags (for example `work/acme`), and should filters understand the hierarchy?
-2. Person `name`: a single string, or structured parts (given and family names) as an optional core shape?
-3. Task and Project dates (`due`, `start`, `completed`): kept out of the core for now. Add `completed` as a core timestamp set when the category becomes `done` or `dropped`?
-4. Maximum `Area.parent` depth, if any.
+1. ~~Tag syntax~~ — resolved: names may contain `.` and `/`; values can be any YAML value (tags are a name → value map, list shorthand accepted); names are opaque with no hierarchy semantics.
+2. ~~Person `name`~~ — resolved: **structured** (`given`, `middle`, `family`, `nickname`, `display`, at least one non-empty).
+3. ~~Dates~~ — resolved: add a core **`completed`** timestamp to Task and Project, maintained by the plugin; `due` and `start` stay implementation fields.
+4. ~~Maximum `Area.parent` depth~~ — resolved: **no maximum** (cycles are still an error).
+5. **Tag values on external backends.** Backends with label-only tags cannot store values. Does an adapter drop the values, store them in a side field, or declare `supports_tag_values: false` (doc 03) and be refused for implementations that use them?
 
 ## Next steps
 
-1. Resolve the open questions.
-2. Replace doc 01's strawman table with a summary that links here (done together with this draft) and confirm the doc 03 envelope examples match.
+1. Resolve open question 5 (tag values on external backends).
+2. ~~Replace doc 01's strawman table with a summary that links here~~ — done. Update the doc 03 envelope example to show `tags` as a map and `completed` for tasks.
 3. Write the built-in `default-*` starter implementations against these fields.
 4. Cross-check the rules in docs 04 and 05 that name fields and relations (for example the `blocked` computation and `source`/`due` examples).

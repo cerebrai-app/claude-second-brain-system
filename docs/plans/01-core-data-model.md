@@ -47,10 +47,10 @@ Summary only; fields, relations, cardinality, status rules and reserved names ar
 | `Task` | Actionable unit with a state | `title`, `status` (`open`/`done`/`dropped`, plus declared custom values) | `belongs_to` → Project/Area, `assigned_to` → Person, `blocked_by` → Task |
 | `Project` | Outcome with an end state | `title`, `status` (`outcome` optional) | `area` → Area, `owner` → Person |
 | `Area` | Ongoing responsibility, no end date | `title` | `parent` → Area |
-| `Person` | Someone you interact with. **Top-level:** not placed in any Area or Project, and never in the Inbox | `name` | Named relations to any item (names are chosen by the implementation or the user, e.g. `works_with`, `owner_of`); no required relation |
+| `Person` | Someone you interact with. **Top-level:** not placed in any Area or Project, and never in the Inbox | `name` (structured: `given`, `family`, ...) | Named relations to any item (names are chosen by the implementation or the user, e.g. `works_with`, `owner_of`); no required relation |
 | `Archive` | Holds retired objects of any type | `title` | `contains` → any item except Archive |
 
-All five extensible types also have an optional `tags` list. Core fields are deliberately minimal; implementations add the rest. **`Archive` is the exception: it cannot be extended.**
+All five extensible types also have an optional `tags` map (tag name → value, doc 08), and Task and Project have a plugin-maintained `completed` timestamp. Core fields are deliberately minimal; implementations add the rest. **`Archive` is the exception: it cannot be extended.**
 
 ### Archive
 
@@ -170,7 +170,9 @@ Guidance for Claude when working with people who are colleagues.
 id: 01JPERSON...
 type: person
 impl: default-person
-name: Alex Rivera
+name:
+  given: Alex
+  family: Rivera
 traits: [colleague, client]
 colleague:
   employer: Acme
