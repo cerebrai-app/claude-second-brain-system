@@ -44,8 +44,18 @@ match the lock, from the lock without re-resolving), and **run** (run a script i
 Rules:
 - **Adding a dependency needs approval.** The agent shows the package, the version constraint and the resulting lock diff before anything is installed, since this runs third-party code and uses the network.
 - **A fresh clone** has no `.venv`. The plugin runs **sync** on first use (or via `/brain python sync`), after confirmation because it installs packages.
-- `requires-python` is set at init to the interpreter found. If no suitable Python or tool is found, setup skips the workspace and says so (it is optional; see Install step in doc 06).
+- **Python version** *(Decided)*: the workspace requires a recent minimum minor version, **Python 3.12** (`requires-python = ">=3.12"`). The plugin ships this minimum and raises it deliberately in a later release (a core migration, doc 02). See Python interpreter below.
+- **POSIX only** *(Decided)*: Linux and macOS are supported in the MVP. Windows is deferred (`deferred.md`).
 - *Deferred:* running the workspace in a Docker container (`deferred.md`).
+
+## Python interpreter *(Decided)*
+
+1. **Use an existing interpreter** that satisfies the minimum, found through the chosen tool first (its managed Pythons, the active environment), then on the `PATH`.
+2. **Otherwise ask for approval to fetch one**, using whatever the user already has: `uv`, `pyenv`, `conda`/`mamba`, `pdm`, or another installer the machine provides. The prompt names the tool, the exact
+   version and what will be downloaded, and nothing is fetched without a yes.
+3. **If there is no installer or the user declines**, setup skips the workspace and reports what to install (it is optional; see the install step in doc 06). `/brain python init` can run it later.
+
+The migration scripts in doc 02 are independent of this: they run with any `python3 -I`.
 
 ## Scripts
 
@@ -92,6 +102,33 @@ core type. The services are the user's choice (for example Todoist for tasks, or
 dependencies and lock, and is added through the approved dependency flow above. The script follows the adapter contract (doc 03): `describe`, `create`, `read`, `update`, `list`, `resolve`, `archive` and the rest, with credentials from
 `requires_env`.
 
+### Adapter base class *(Decided)*
+
+There is **no general helper library** for vault operations. Adapter authors do get one provided class: setup copies a small standard-library-only module, `lib/brain_adapter.py`, from the plugin into the
+workspace (copied, not linked, so the vault owns it like the starter definitions in doc 01; core migrations update it when the storage contract changes). A `script` adapter subclasses it and implements the contract
+operations; the base class handles the process boundary:
+
+```python
+from brain_adapter import BrainAdapter, NotFound, Conflict, RateLimited
+
+class MyBackend(BrainAdapter):
+    def describe(self): ...                # capabilities and settings schema (doc 03)
+    def create(self, envelope): ...        # returns the envelope, with native_id if any
+    def read(self, ref): ...
+    def update(self, envelope): ...        # raise Conflict on a revision mismatch
+    def list(self, query, limit, cursor): ...
+    def resolve(self, ref): ...
+    def archive(self, ref, revision): ...  # plus unarchive and delete where supported
+
+if __name__ == "__main__":
+    MyBackend().main()                     # reads the operation JSON from stdin, writes the result JSON to stdout
+```
+
+- `main()` parses the request, dispatches to the method for the operation, and serializes the result or the error. Exceptions map to the doc 03 error codes (`NotFound`, `Conflict`, `Invalid`,
+  `Unauthorized`, `RateLimited`, `Unavailable`, `Unsupported`, anything else becomes `internal`).
+- Operations a backend does not support raise `Unsupported`; the base class implements `describe` defaults and rejects unknown operations.
+- It is a convenience, not a requirement: any executable that follows the doc 03 protocol is still a valid adapter.
+
 ### Access to vault data: unrestricted *(Decided)*
 
 Scripts may read and write the vault however they need (files, git, the network, SDKs). The plugin does not sandbox them. Consequences, stated plainly:
@@ -103,9 +140,9 @@ Scripts may read and write the vault however they need (files, git, the network,
 
 Agent-written (and user-written) scripts are code that runs with the user's privileges, so the same rule as hooks applies: **show and approve on first run, and again on any change**.
 
-- The **approved hash** is the SHA-256 of the script file together with every `lib/` module in the workspace. Any change to either invalidates approval and shows a diff before the next run.
+- The **approved hash** is the SHA-256 of the script file together with every `lib/` module in the workspace **and `pyproject.toml`** *(Decided)*. Any change to any of them invalidates approval and shows a diff before the next run.
 - A new or changed script is shown with its description, `requires_env`, timeout and the exact command, and runs only after confirmation. The hash and date are then written to the registry.
-- Dependency changes are approved separately (above). A lock change alone does not invalidate script approvals.
+- Dependency changes are approved separately (above). Because `pyproject.toml` is in the hash, adding or changing a dependency invalidates **every** registered script's approval; `/brain python approve --all` shows the `pyproject.toml` diff once and re-approves all scripts whose own file and `lib/` are unchanged. A lock-file change alone (with no `pyproject.toml` change) does not invalidate approvals.
 - Unattended or non-interactive runs (post-MVP) may run only scripts whose current hash is approved; anything else is queued, as in doc 05.
 - Each run is appended to the automation log (doc 05): script name, caller (rule or adapter operation), duration and outcome.
 
@@ -127,6 +164,7 @@ The workspace `README.md` (created at setup, owned by the vault) tells agents th
 - `/brain python list`: list registered scripts with approval state (approved, changed since approval, never approved).
 - `/brain python run <name> [json]`: run a registered, approved script.
 - `/brain python approve <name>`: show the script and approve its current hash.
+- `/brain python approve --all`: after a `pyproject.toml` change, show that diff once and re-approve every script whose own file and `lib/` are unchanged.
 
 ## Interaction with other docs
 
@@ -136,13 +174,13 @@ The workspace `README.md` (created at setup, owned by the vault) tells agents th
 
 ## Open questions
 
-1. Windows and non-POSIX shells: which of the four tools and commands are supported in the MVP?
-2. Does the approval hash need to include `pyproject.toml` (for example changed entry points), or is the lock-plus-dependency approval enough?
-3. Should the workspace expose an optional helper library for common vault operations (read an item, apply an operation through the storage contract), or leave that entirely to each script?
-4. Python version management: require the interpreter to already exist, or integrate with the tool's managed Pythons?
+1. ~~Platforms~~ — resolved: **POSIX only** (Linux, macOS) for now; Windows is deferred.
+2. ~~Approval hash scope~~ — resolved: **include `pyproject.toml`** (with the script and `lib/`).
+3. ~~Vault helper library~~ — resolved: **no** general helper library; a provided **`BrainAdapter` base class** for adapters (see Adapter base class).
+4. ~~Python version management~~ — resolved: minimum **Python 3.12**; use an existing interpreter, otherwise ask approval to fetch one with the user's tool (`uv`, `pyenv`, `conda`, ...).
 
 ## Next steps
 
-1. Resolve the open questions.
-2. Define the shipped `README.md` for agents and the starter `pyproject.toml`.
-3. Specify the `python:` command form in docs 03 and 05 precisely (parsing, errors for unknown or unapproved scripts).
+1. Define the shipped `README.md` for agents, the starter `pyproject.toml`, and the `brain_adapter.py` module (exact method signatures and the error classes).
+2. Specify the `python:` command form in docs 03 and 05 precisely (parsing, errors for unknown or unapproved scripts).
+3. Specify how the tools map to the four abstract operations (init, add, sync, run), including the interpreter-fetch step per tool.

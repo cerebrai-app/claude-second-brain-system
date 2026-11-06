@@ -13,6 +13,7 @@ Designed or reserved in the specs, deliberately not built in the first release.
 |---|---|---|---|
 | Bulk migration of objects between implementations (a command that converts many items, for example all persons to a new implementation) | Per-item conversion (doc 06) works for any type; a `person` migration-target implementation can coexist with the active one. No bulk command, so users convert items individually. | 06, 01 | Needs selection, a combined conversion report and resumability. Promotion of the target to active is also manual in the MVP. |
 | Bulk triage (apply one Area/Project to several selected items in one approval) | Triage is one item at a time. | 06 | |
+| Windows support for the Python workspace | POSIX only (Linux, macOS). | 07 | |
 | Running the Python workspace in a Docker container | The workspace runs in a local environment managed by the user's package manager (doc 07). | 07 | |
 | `schedule` triggers and session-start catch-up | `on: schedule` is rejected at load time; time-based work runs via `manual` rules (`/brain run ...`). | 05 | Rule shape is reserved so it can be added without changes. Includes the open question of how "due" is decided when many schedule rules exist. |
 | Non-interactive runs (cron, CI, `claude -p "/brain run-due"`) | Every run happens inside an interactive session. | 05 | Would reuse the pending-approval queue for rules needing Claude or approval, and the `when` condition could then not be judged. |
