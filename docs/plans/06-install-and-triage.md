@@ -181,7 +181,7 @@ Each triage operation is logged like a rule run (doc 05). For the markdown adapt
 1. ~~Persons and placement~~ — resolved: **persons are top-level**: no Area or Project, never in the Inbox, never triaged. They can have named relations to any item (doc 01).
 2. ~~Type inference at capture~~ — resolved: **no inference.** The default type depends on the input source (`capture.type_by_source`, built-in default `note`), and `--type` overrides it.
 3. ~~Bulk triage~~ — resolved: **deferred past the MVP.** Triage is one item at a time (see `deferred.md`).
-4. **Candidate discovery cost.** A client-side scan of four types across all bindings; do we need a structural "relation absent" query key in doc 03?
+4. ~~Candidate discovery cost~~ — resolved: **the storage contract is unchanged** (no "relation absent" query key). Discovery filters client-side; where that is too slow, the flow is optimized **per adapter** as needed, guided by the latency log (doc 03).
 5. ~~Commit granularity~~ — resolved: **one commit per session**, offered at the end of `/brain triage`.
 6. **Half-converted marker location.** Reuses the pending-style local state in this draft; may deserve its own file under `.brain/`.
 7. **Bulk conversion command.** Selection (all items of an implementation, a filter), one combined report vs. per-item, and ordering/resumability for large vaults. Post-MVP.
