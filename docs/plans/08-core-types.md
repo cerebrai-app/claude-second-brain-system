@@ -208,5 +208,5 @@ Where a name is a core name for one type (for example `owner` on Project) it is 
 
 1. ~~Resolve the open questions~~ — done.
 2. ~~Replace doc 01's strawman table with a summary that links here~~ — done. Update the doc 03 envelope example to show `tags` as a map and `completed` for tasks.
-3. Write the built-in `default-*` starter implementations against these fields.
+3. ~~Write the built-in `default-*` starter implementations~~ — done: [09 — Built-in Starter Implementations](09-starter-implementations.md).
 4. Cross-check the rules in docs 04 and 05 that name fields and relations (for example the `blocked` computation and `source`/`due` examples).

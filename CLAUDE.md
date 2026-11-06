@@ -13,6 +13,7 @@ Currently there is a single plugin, `brain` (`plugins/brain/`), intended to beco
 - `.claude-plugin/marketplace.json` — the marketplace manifest. Lists each plugin's `name`, `source` (relative path), `description`, and `version`. Adding a new plugin means adding both the directory under `plugins/` and an entry here.
 - `plugins/<plugin-name>/.claude-plugin/plugin.json` — per-plugin manifest (`name`, `description`, `version`, `author`). This is what Claude Code reads when a user runs `/plugin install <plugin-name>@<marketplace-name>`.
 - `plugins/<plugin-name>/skills/` — where that plugin's skills live (one subdirectory per skill, each with a `SKILL.md`). A plugin can also define `commands/`, `agents/`, or `hooks/` directories following the same convention once those are introduced.
+- `plugins/brain/starters/<type>/default-<type>.md` — the built-in starter implementation definitions that `/brain setup` copies into a vault's `.brain/impls/`. Design docs for the whole system are in `docs/plans/` (see `docs/plans/09-starter-implementations.md`).
 - Keep plugin and marketplace `version` fields in sync when bumping a plugin's version — the marketplace entry is not derived automatically from the plugin manifest.
 
 ## GitHub Agentic Workflows (gh-aw)

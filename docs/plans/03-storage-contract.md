@@ -21,7 +21,7 @@ Linear, Trello, ...) without the rest of the system caring. The contract is the 
   "ref": "task:01JABC...",
   "type": "task",
   "impl": "gtd-task",
-  "fields": { "title": "Draft Q4 plan", "status": "open", "due": "2026-11-15" },
+  "fields": { "title": "Draft Q4 plan", "status": "open", "due": "2026-11-15", "tags": { "q4": "" } },
   "relations": { "belongs_to": ["project:01J..."], "blocked_by": [] },
   "body": "Free-form markdown.",
   "created": "2026-11-03T10:00:00Z",

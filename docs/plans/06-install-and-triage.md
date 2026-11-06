@@ -195,4 +195,4 @@ Each triage operation is logged like a rule run (doc 05). For the markdown adapt
 
 1. ~~Resolve the open questions~~ — done; only the deferred bulk conversion command and undo remain (see `deferred.md`).
 2. ~~Update docs 01, 02 and 05~~ — done: doc 01 points here and no longer says "conversion mechanics TBD"; doc 02 already states the manifest is written by setup; doc 05 has `set_relation`, `convert` (interactive only) and the capture inline offer.
-3. Write the built-in starter implementations (`default-*`) that setup copies, against the core fields in [08 — Core Types](08-core-types.md).
+3. ~~Write the built-in starter implementations~~ — done: [09 — Built-in Starter Implementations](09-starter-implementations.md), shipped at `plugins/brain/starters/`.
