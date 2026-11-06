@@ -116,3 +116,23 @@ def test_sync_refresh_flag(b):
     assert code == 0 and out["events"] == [] and out["report"]["adopted"] == []
     code, out = run_cli(b, "sync", "--refresh", "--dry-run")
     assert code == 2 and out["error"] == "invalid"
+
+
+def test_find_matches_type_impl_and_field_values(b):
+    b.item("note", "default-note", "notes", "2026-11-06", "tags:\n  topic: pricing\n")
+    b.item("note", "default-note", "notes", "Other")
+    b.item("task", "default-task", "tasks", "2026-11-06", "status: open\n")
+    code, out = run_cli(b, "find", "--type", "note", "--where", "title=2026-11-06")
+    assert code == 0 and out["count"] == 1 and out["items"][0]["title"] == "2026-11-06"
+    code, out = run_cli(b, "find", "--type", "note", "--where", "tags.topic=pricing")                 # dotted paths reach nested fields
+    assert code == 0 and out["count"] == 1
+    code, out = run_cli(b, "find", "--type", "note", "--impl", "journal", "--where", "title=2026-11-06")
+    assert code == 1 and out["count"] == 0                                                              # none: exit 1
+    code, out = run_cli(b, "find", "--type", "note", "--where", "oops")
+    assert code == 2 and out["error"] == "invalid"
+
+
+def test_find_skips_archived_items_unless_asked(b):
+    b.write("archive/note/default-note/old.md", "---\nid: 01J0000000000000000000000Z\nslug: old\ntype: note\nimpl: default-note\ntitle: Old\narchive: archive:archive\narchived_at: 2026-11-01T10:00:00Z\ncreated: 2026-11-01T10:00:00Z\nupdated: 2026-11-01T10:00:00Z\n---\n")
+    assert run_cli(b, "find", "--type", "note", "--where", "title=Old")[0] == 1
+    assert run_cli(b, "find", "--type", "note", "--where", "title=Old", "--include-archived")[0] == 0

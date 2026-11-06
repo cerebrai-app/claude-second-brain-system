@@ -186,6 +186,10 @@ applied only on approval. It does not fire `create` or `capture` and does not fi
 
 Use it whenever the destination is known, for example a journal note placed under a `Journals` area. Without `place`, the new item has no placement, so it **lands in the Inbox** and becomes a triage candidate (and fires `capture`); loading a rule that creates a `task`, `note` or `project` without `place` is a warning. A vault rule must list the implementations of every type it finds or creates in `requires`.
 
+### Creating only once: `unless_exists` *(Decided)*
+
+`create_item` accepts `unless_exists: { type, impl?, where: { field: value, ... } }`. Before creating, the plugin looks for an item of that type (and implementation, when given) whose fields equal the `where` values (dotted paths such as `colleague.employer` reach nested fields; archived items do not count). If one exists, the action is **skipped**, logged as `skipped: exists` with the existing ref, and the rule carries on; that ref is what a later action or `as:` binding sees. This is the structural way to make a manual rule idempotent (a daily journal note, say) instead of a `when` condition that Claude judges. The lookup is deterministic: `brainctl find --type note --impl journal --where title=2026-11-06` (doc 11). A vault rule must list the implementation in `unless_exists` in `requires`; `validate` rejects a malformed `unless_exists` (`unless-exists`).
+
 ### Using `surface` results as input to later actions
 
 `surface` can collect items for another operation. `as: <name>` binds the result set (ordered `ref`s plus the `fields` and `relations` of each item,
@@ -284,7 +288,7 @@ Items are also edited by hand (markdown files) or in a backend's own UI. The plu
   - It adds the missing fields to the file's frontmatter: `id` (a new ULID), `type` and `impl` (from the binding), `slug` (the file's name stem; the file keeps its name), `created` (the first git commit time of the file, else its modification time), `updated` (now), and `title` (existing, else the first `#` heading, else the slug in words). Schema `default`s fill absent fields.
   - It is **additive only**: it never renames the file or changes the body or any existing key, value or key order.
   - A file whose required fields remain unmet is **not adopted**: it is reported as invalid and left untouched. A directory that matches more than one binding is ambiguous: reported, nothing adopted. Files outside every binding's directory are not scanned.
-  - An adopted file is then a new object: `create` (and `capture` if it is in the Inbox), `origin: external/<type>/<impl-id>`. Adoption is the only case where sync writes to an item, it touches only these fields, it appears in the sync report, and git can undo it.
+  - An adopted file is then a new object: `create` (and `capture` if it is in the Inbox), `origin: external/<type>/<impl-id>`. **Completing incomplete items** *(Decided)*: a file that already has `id`, `type` and `impl` but lacks a `slug`, `title` (or person `name`), `status`, `created` or `updated` gets only those missing fields added, in the same additive way (the slug from the file name, and never a schema default). It is listed in the report as `completed`, the item shows as an `update`, and a value that is present but wrong (a slug that differs from the file name) is left for `validate`. Adoption and completion are the only cases where sync writes to an item, it touches only these fields, it appears in the sync report, and git can undo it.
 - **Validation:** an externally created or changed item is validated against its implementation schema first. If invalid, no rules run on it; it is
   reported to the user as invalid.
 - **First run:** with no seen state, the plugin builds the baseline silently (no `create` storm). Only changes after the baseline emit events.

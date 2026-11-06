@@ -103,6 +103,46 @@ def cmd_adapter(args):
     return EXIT_OK
 
 
+def _dig(front, dotted):
+    node = front
+    for part in dotted.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return None
+        node = node[part]
+    return node
+
+
+def cmd_find(args):
+    """Items matching a type, an optional impl and field equalities: the structural check behind `unless_exists`."""
+    vault = _vault(args)
+    wanted = {}
+    for pair in args.where or []:
+        if "=" not in pair:
+            print(util.dumps({"ok": False, "error": "invalid", "message": f"--where needs field=value, got {pair!r}"}))
+            return EXIT_USAGE
+        key, value = pair.split("=", 1)
+        wanted[key] = value
+    scan = vault.scan()
+    rows = []
+    for item in scan.items:
+        if item.type != args.type or (args.impl and item.impl != args.impl) or (item.archived and not args.include_archived):
+            continue
+        if all(_same(_title_aware(item, k), v) for k, v in wanted.items()):
+            rows.append({"ref": item.ref, "impl": item.impl, "path": item.relpath, "archived": item.archived, "title": item.title})
+    print(util.dumps({"ok": True, "count": len(rows), "items": rows, "incomplete": [{"binding": f"{t}/{n}", "reason": r} for t, n, r in scan.skipped]}))
+    return EXIT_OK if rows else EXIT_FINDINGS
+
+
+def _title_aware(item, key):
+    return item.title if key == "title" and item.type == "person" else _dig(item.front, key)
+
+
+def _same(actual, wanted):
+    if actual is None:
+        return False
+    return str(util.jsonable(actual)).strip() == wanted if not isinstance(actual, (dict, list)) else util.dumps(util.jsonable(actual)) == wanted
+
+
 def cmd_approve_hash(args):
     vault = _vault(args)
     print(approval.approval_hash(vault.path(".brain/python"), args.script))
@@ -143,6 +183,12 @@ def build_parser():
     s = sub.add_parser("read", help="read an item by ref")
     s.add_argument("ref")
     s.set_defaults(fn=cmd_read)
+    s = sub.add_parser("find", help="find items by type, impl and field values (exit 1 when none match)")
+    s.add_argument("--type", required=True)
+    s.add_argument("--impl")
+    s.add_argument("--where", action="append", metavar="FIELD=VALUE", help="field equality; repeatable; dotted paths reach nested fields")
+    s.add_argument("--include-archived", action="store_true")
+    s.set_defaults(fn=cmd_find)
     s = sub.add_parser("adapter", help="call one operation of a script implementation's adapter (needs the script approved)")
     s.add_argument("impl")
     s.add_argument("op", choices=adapter_ops())

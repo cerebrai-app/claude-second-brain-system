@@ -163,6 +163,21 @@ def plan_adoption(vault, type_, impl_name, relpath, parsed):
     return additions, problems
 
 
+COMPLETABLE = ("slug", "title", "name", "status", "created", "updated")
+
+
+def plan_completion(vault, item):
+    """Identity fields a hand-written item that already has an id, type and impl is missing: slug, title or name, status, created,
+    updated. Returns the additions (possibly empty). Schema defaults are not filled and nothing existing is touched."""
+    if item.archived or item.relpath.startswith("script:"):
+        return {}
+    parsed = util.read_markdown(vault.path(item.relpath))
+    if parsed.error or parsed.front is None:
+        return {}
+    additions, _problems = plan_adoption(vault, item.type, item.impl, item.relpath, parsed)
+    return {k: v for k, v in additions.items() if k in COMPLETABLE and k not in parsed.front}
+
+
 def _mtime(path):
     import datetime as dt
     try:
@@ -246,6 +261,19 @@ def sync(vault, adopt=True, dry_run=False, refresh=False):
             pending_adopt.append(relpath)
         else:
             report["unadopted"].append(relpath)
+    # items that already have an id but lack identity fields (a slug, say): complete them additively, like adoption
+    report["completed"] = []
+    report["incomplete_identity"] = []
+    for item in scan.items:
+        additions = plan_completion(vault, item)
+        if not additions:
+            continue
+        if adopt and not dry_run:
+            adopt_file(vault, item.relpath, util.read_markdown(vault.path(item.relpath)), additions)
+            report["completed"].append({"path": item.relpath, "added": sorted(additions)})
+            pending_adopt.append(item.relpath)
+        else:
+            report["incomplete_identity"].append({"path": item.relpath, "missing": sorted(additions)})
     if pending_adopt:
         scan = vault.scan()
 

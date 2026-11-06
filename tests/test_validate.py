@@ -476,3 +476,28 @@ def test_script_impl_without_a_backend_spec_warns_until_one_exists(b):
 def test_script_impl_timeout_must_be_a_positive_integer(b):
     b.write(".brain/impls/task/remote.md", SCRIPT_IMPL.format(extra="  timeout_seconds: 0\n").replace("  timeout_seconds: 0\n---", "  timeout_seconds: 0\n---"))
     assert has(run(b), "storage-timeout", "error")
+
+
+# ---- idempotent creation and tag instructions -------------------------------------------------------------------------
+
+def test_unless_exists_needs_a_type_and_a_where(b):
+    b.impl("note", "journal", path="journal/{slug}.md")
+    for bad in ("{ type: note }", "{ where: { title: x } }", "{ type: spaceship, where: { title: x } }", "[ title ]"):
+        vault_rules(b, f"automation:\n  - id: r\n    requires: [ {{ type: note, impl: journal }}, {{ type: area, impl: default-area }} ]\n    on: manual\n    do:\n      - {{ action: create_item, type: note, impl: journal, place: 'area:inbox', unless_exists: {bad} }}\n")
+        assert has(run(b), "unless-exists", "error"), bad
+    vault_rules(b, "automation:\n  - id: r\n    requires: [ { type: note, impl: journal }, { type: area, impl: default-area } ]\n    on: manual\n    do:\n      - { action: create_item, type: note, impl: journal, place: 'area:inbox', unless_exists: { type: note, impl: journal, where: { title: x } } }\n")
+    assert not has(run(b), "unless-exists") and not has(run(b), "rule-undeclared-impl")
+
+
+def test_unless_exists_in_a_vault_rule_must_name_a_required_impl(b):
+    b.impl("note", "journal", path="journal/{slug}.md")
+    b.impl("note", "other", path="other/{slug}.md")
+    vault_rules(b, "automation:\n  - id: r\n    requires: [ { type: note, impl: journal } ]\n    on: manual\n    do:\n      - { action: create_item, type: note, impl: journal, place: 'area:inbox', unless_exists: { type: note, impl: other, where: { title: x } } }\n")
+    assert has(run(b), "rule-undeclared-impl", "error")
+
+
+def test_an_instruction_asking_for_several_tags_warns(b):
+    for text, warned in (("Propose up to two tags (key 'topic') for the note.", True), ("Suggest 3 tags for it.", True),
+                         ("Propose tags with distinct keys, up to two tags.", False), ("Propose one tag.", False)):
+        rule_impl(b, f"automation:\n  - id: t\n    on: capture\n    do:\n      - {{ action: claude, instruction: \"{text}\" }}\n")
+        assert has(run(b), "tags-one-per-key", "warning") is warned, text

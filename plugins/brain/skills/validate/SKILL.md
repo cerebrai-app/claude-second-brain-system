@@ -19,7 +19,7 @@ Read the `core` skill first.
 - **Unadopted files:** markdown files in a binding's directory without `id`/`type`/`impl` are reported (sync adopts them).
 - **References:** dangling refs are reported, never dropped; relations to archived items are warnings.
 - **Conversions:** any file in `.brain/conversions/` is a half-converted item; offer to finish the source delete.
-- **Automation:** vault rules whose `requires` cannot be satisfied are *blocked*; so is any rule that names a filter or sort its implementation does not define; rules using `schedule` are invalid; a rule that creates a `task`, `note` or `project` without `place` is a warning.
+- **Automation:** vault rules whose `requires` cannot be satisfied are *blocked*; so is any rule that names a filter or sort its implementation does not define; rules using `schedule` are invalid; a rule that creates a `task`, `note` or `project` without `place` is a warning; a malformed `unless_exists` is an error, and a `claude` instruction asking for several tags (a tag map has one value per key) is a warning.
 - **Gitignore:** the required entries are present, and every path that must be committed (`.brain/python/lib/`, `.brain/id-index/`, items) is **not** ignored. Check with `git check-ignore -v`; fix an ignored path with a negation line (for example `!.brain/python/lib/`).
 - **Python workspace (required):** `pyproject.toml` and the lock file present and consistent; every registered script exists and is approved at its current hash (`changed since approval` or `never approved` otherwise).
 

@@ -265,3 +265,52 @@ def test_refresh_does_not_adopt_and_does_not_hide_hand_written_files(b):
     result = run(b, refresh=True)
     assert result["report"]["unadopted"] == ["notes/by-hand.md"] and b.read("notes/by-hand.md") == "# By hand\n"
     assert run(b)["report"]["adopted"] == ["notes/by-hand.md"]
+
+
+# ---- completing identity fields on files that already have an id ------------------------------------------------------
+
+def hand_note(b, name, ident="01J0000000000000000000000X", extra="", body="Body\n"):
+    b.write(f"notes/{name}.md", f"---\nid: {ident}\ntype: note\nimpl: default-note\n{extra}---\n{body}")
+
+
+def test_an_item_with_an_id_but_no_slug_is_completed(b):
+    hand_note(b, "scribble", extra='title: "Keep me"\ncreated: 2026-11-01T10:00:00Z\nupdated: 2026-11-01T10:00:00Z\ncustom: stays\n', body="Hello\n")
+    result = run(b)
+    assert result["report"]["completed"] == [{"path": "notes/scribble.md", "added": ["slug"]}]
+    text = open(b.path("notes/scribble.md")).read()
+    assert "slug: scribble" in text and 'title: "Keep me"' in text and "custom: stays" in text and text.endswith("---\nHello\n")
+    assert [i.front["slug"] for i in b.vault().scan().items if i.id == "01J0000000000000000000000X"] == ["scribble"]
+
+
+def test_completion_adds_only_identity_fields_not_defaults_or_an_existing_value(b):
+    b.impl("note", "journal", fields="    mood: { type: string, default: calm }\n", path="journal/{slug}.md")
+    b.write("journal/2026-11-06.md", "---\nid: 01J0000000000000000000000Y\ntype: note\nimpl: journal\nslug: custom-slug\ntitle: T\nupdated: 2026-11-01T10:00:00Z\n---\n")
+    result = run(b)
+    assert result["report"]["completed"] == [{"path": "journal/2026-11-06.md", "added": ["created"]}]      # the slug differing from the file name is left to validate
+    text = open(b.path("journal/2026-11-06.md")).read()
+    assert "slug: custom-slug" in text and "mood" not in text
+
+
+def test_a_complete_item_is_not_touched_and_a_second_sync_is_quiet(b):
+    hand_note(b, "scribble")
+    run(b)
+    before = open(b.path("notes/scribble.md")).read()
+    again = run(b)
+    assert again["report"]["completed"] == [] and again["events"] == [] and open(b.path("notes/scribble.md")).read() == before
+
+
+def test_completion_respects_no_adopt_and_dry_run(b):
+    hand_note(b, "scribble")
+    for kw in ({"adopt": False}, {"dry_run": True}):
+        result = run(b, **kw)
+        assert result["report"]["completed"] == []
+        assert result["report"]["incomplete_identity"] == [{"path": "notes/scribble.md", "missing": ["created", "slug", "title", "updated"]}]
+    assert "slug:" not in open(b.path("notes/scribble.md")).read()
+
+
+def test_completing_a_known_item_is_reported_as_an_update(b):
+    hand_note(b, "scribble", extra='title: T\ncreated: 2026-11-01T10:00:00Z\nupdated: 2026-11-01T10:00:00Z\nslug: scribble\n')
+    run(b)
+    b.write("notes/scribble.md", open(b.path("notes/scribble.md")).read().replace("slug: scribble\n", ""))
+    result = run(b)
+    assert [e["trigger"] for e in result["events"]] == ["update"] and result["report"]["completed"] == [{"path": "notes/scribble.md", "added": ["slug"]}]

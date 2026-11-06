@@ -539,6 +539,10 @@ def _trigger_name(on):
     return None
 
 
+TAG_QUANTITY_RE = re.compile(r"\b(two|three|four|several|multiple|\d+)\s+(\w+\s+)?tags\b|\bup to \w+ (\w+\s+)?tags\b", re.I)
+TAG_DISTINCT_RE = re.compile(r"\b(distinct|different|separate|unique)\b|\bkeys\b", re.I)
+
+
 def _check_rule(vault, rule, subject, owner, is_vault, registry, f):
     trigger = _trigger_name(rule.get("on"))
     if trigger == "schedule":
@@ -584,7 +588,17 @@ def _check_rule(vault, rule, subject, owner, is_vault, registry, f):
             run = str(action.get("run", ""))
             if run.startswith("python:") and registry is not None and run[len("python:"):] not in registry:
                 f.error("hook-unregistered", subject, f"{run} is not in the Python workspace registry")
+        elif kind == "claude":
+            text = str(action.get("instruction", ""))
+            if TAG_QUANTITY_RE.search(text) and not TAG_DISTINCT_RE.search(text):
+                f.warn("tags-one-per-key", subject, "the instruction asks for several tags, but tags are a map with one value per key; name distinct keys")
         elif kind == "create_item":
+            unless = action.get("unless_exists")
+            if unless is not None:
+                if not isinstance(unless, dict) or unless.get("type") not in CORE_TYPES or not isinstance(unless.get("where"), dict) or not unless["where"]:
+                    f.error("unless-exists", subject, "unless_exists needs a core `type` and a non-empty `where` mapping of field values")
+                elif is_vault and unless.get("impl") and (unless["type"], unless["impl"]) not in required:
+                    f.error("rule-undeclared-impl", subject, f"{unless['type']}/{unless['impl']} is used in `unless_exists` but not in `requires`")
             if action.get("type") in PLACED_CREATORS and "place" not in action:
                 f.warn("rule-unplaced", subject, f"creates a {action['type']} without `place`; it will land in the Inbox")
         elif kind == "write_body":
