@@ -42,6 +42,8 @@ sorts:
       - { name: priority, type: enum,   order: [high, med, low] }
 ```
 
+Sort `keys` and filter predicates use the field type names from doc 08 (`string`, `text`, `integer`, `number`, `boolean`, `date`, `datetime`, `enum`). A key may name a schema field, a core field, an envelope property (`created`, `updated`), or a part of the Person `name`; an `enum` key sorts by its declared order unless the key gives its own `order`.
+
 A rule is a short, self-contained English description. Guidance for authors (to be included in the plugin docs): name the fields used, state how
 missing values behave, state how ties break, and avoid relative terms without a reference (say "due today or earlier", not "soon").
 
