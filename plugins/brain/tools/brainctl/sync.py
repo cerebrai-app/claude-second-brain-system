@@ -191,6 +191,9 @@ def _first_commit_time(vault, relpath):
         return None
     import subprocess
     try:
+        # only a tracked file has a history of its own; an untracked file at a path that once held another file does not
+        if subprocess.run(["git", "ls-files", "--error-unmatch", "--", relpath], cwd=vault.root, capture_output=True).returncode != 0:
+            return None
         r = subprocess.run(["git", "log", "--diff-filter=A", "--follow", "--format=%cI", "--", relpath], cwd=vault.root, capture_output=True, text=True)
     except OSError:
         return None

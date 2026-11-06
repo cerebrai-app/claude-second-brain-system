@@ -1,4 +1,5 @@
 """`/brain:upgrade`: copy only the changed helper files from the plugin into the vault, and the environment guard."""
+from brainctl import __version__
 import importlib.util
 import json
 import os
@@ -63,10 +64,10 @@ def test_helper_version_is_recorded_without_touching_the_rest_of_the_manifest(b)
     before = open(manifest).read()
     up.upgrade(b.root, SOURCE)
     after = open(manifest).read()
-    assert after.startswith(before) and after.endswith('helper_version: "0.2.0"\n')
+    assert after.startswith(before) and after.endswith(f'helper_version: "{__version__}"\n')
     up.upgrade(b.root, SOURCE)                                          # idempotent: replaces, never duplicates
     assert open(manifest).read().count("helper_version") == 1
-    assert b.vault().manifest["helper_version"] == "0.2.0"
+    assert b.vault().manifest["helper_version"] == __version__
 
 
 def test_not_a_vault_and_main(tmp_path, capsys):

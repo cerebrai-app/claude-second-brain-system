@@ -323,3 +323,24 @@ def test_an_implementation_without_a_slug_field_gets_no_slug_on_adoption(b):
     result = run(b)
     assert result["report"]["adopted"] == ["plain/idea.md"]
     assert "slug" not in util.ParsedFile(b.read("plain/idea.md")).front
+
+
+def test_created_comes_from_git_history_only_for_a_tracked_file(b):
+    import subprocess
+    git = lambda *a, **kw: subprocess.run(["git", *a], cwd=b.root, check=True, capture_output=True, **kw)
+    run(b)
+    b.write("notes/old.md", "# Old\n")
+    git("add", "-A")
+    env = dict(os.environ, GIT_AUTHOR_DATE="2020-01-02T03:04:05Z", GIT_COMMITTER_DATE="2020-01-02T03:04:05Z")
+    subprocess.run(["git", "commit", "-qm", "old"], cwd=b.root, check=True, env=env, capture_output=True)
+    result = run(b)                                                           # adopts the tracked file: its first commit time
+    assert result["report"]["adopted"] == ["notes/old.md"]
+    import datetime as dt
+    old = dt.datetime(2020, 1, 2, 3, 4, 5, tzinfo=dt.timezone.utc)
+    assert util.ParsedFile(b.read("notes/old.md")).front["created"] == old
+    git("rm", "-q", "-f", "notes/old.md")
+    subprocess.run(["git", "commit", "-qm", "gone"], cwd=b.root, check=True, env=env, capture_output=True)
+    run(b)
+    b.write("notes/old.md", "# Old again\n")                                  # untracked, at a path that once held another file
+    run(b)
+    assert util.ParsedFile(b.read("notes/old.md")).front["created"] != old
