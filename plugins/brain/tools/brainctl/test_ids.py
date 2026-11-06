@@ -56,15 +56,25 @@ class SlugTests(unittest.TestCase):
 
     def test_unique(self):
         self.assertEqual(ids.unique_slug("a", set()), "a")
-        self.assertEqual(ids.unique_slug("a", {"a"}), "a-2")
-        self.assertEqual(ids.unique_slug("a", {"a", "a-2", "A-3"}), "a-4")
+        self.assertEqual(ids.unique_slug("a", {"a"}), "a-02")
+        self.assertEqual(ids.unique_slug("a", {"a", "a-02", "A-03"}), "a-04")
+
+    def test_unique_sorts_alphabetically(self):
+        taken = {"a"}
+        names = ["a"]
+        for _ in range(12):
+            s = ids.unique_slug("a", taken)
+            taken.add(s)
+            names.append(s)
+        self.assertEqual(names, sorted(names))
+        self.assertEqual(names[-1], "a-13")
 
     def test_directory_stems(self):
         with tempfile.TemporaryDirectory() as d:
-            for n in ("draft-q4-plan.md", "draft-q4-plan-2.md", "other.txt"):
+            for n in ("draft-q4-plan.md", "draft-q4-plan-02.md", "other.txt"):
                 open(os.path.join(d, n), "w").close()
-            self.assertEqual(ids.stems(d), {"draft-q4-plan", "draft-q4-plan-2"})
-            self.assertEqual(ids.unique_slug("draft-q4-plan", ids.stems(d)), "draft-q4-plan-3")
+            self.assertEqual(ids.stems(d), {"draft-q4-plan", "draft-q4-plan-02"})
+            self.assertEqual(ids.unique_slug("draft-q4-plan", ids.stems(d)), "draft-q4-plan-03")
         self.assertEqual(ids.stems("/nonexistent-dir-xyz"), set())
 
 

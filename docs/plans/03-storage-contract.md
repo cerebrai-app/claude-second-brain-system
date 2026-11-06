@@ -100,7 +100,7 @@ The plugin adapts to capabilities (e.g. refuses to bind an implementation with `
   - `{slug}`: the item's human-readable `slug` (doc 08), the default file name. Fixed at creation, unique within the directory the path renders to.
   - `{id}`, `{type}`, `{impl}`, or any scalar field of the item.
   - `{field:FORMAT}` for a `date` or `datetime` field (or `created` / `updated`), using these `strftime` codes: `%Y %m %d %H %M %S`. For example `journal/{date}.md` for a `date` field (a `date` renders as `YYYY-MM-DD` by default) or `journal/{created:%Y-%m-%d}.md`.
-  - A rendered path segment is sanitized: `/`, NUL and control characters become `-`, and an empty result is an error. A path that renders to an existing file of a **different item** is a collision: for `{slug}` the plugin picks the next free suffix at creation (`-2`, `-3`); any other template fails with `conflict`.
+  - A rendered path segment is sanitized: `/`, NUL and control characters become `-`, and an empty result is an error. A path that renders to an existing file of a **different item** is a collision: for `{slug}` the plugin picks the next free suffix at creation (`-02`, `-03`, zero-padded); any other template fails with `conflict`.
   Because changing a field can change the path, `update` **moves** the file when the rendered path changes. `{slug}` never changes after creation, so files named by slug do not move when the title changes.
 - **Id → path index:** `resolve`/`read` by ref must work without knowing the template inputs. The adapter maintains a derived
   index (`.brain/index/refs.json`, git-ignored, rebuildable by scanning frontmatter `id`s) and falls back to a scan on miss.

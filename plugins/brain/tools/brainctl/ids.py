@@ -63,14 +63,17 @@ def slugify(text):
 
 
 def unique_slug(base, taken):
-    """Return base, or base-2, base-3, ... the first not in `taken` (compared case-insensitively)."""
+    """Return base, or base-02, base-03, ... the first not in `taken` (compared case-insensitively).
+
+    The collision number is zero-padded to two digits so names sort alphabetically (base, base-02, ..., base-10).
+    """
     used = {t.lower() for t in taken}
     if base.lower() not in used:
         return base
     n = 2
-    while f"{base}-{n}".lower() in used:
+    while f"{base}-{n:02d}".lower() in used:
         n += 1
-    return f"{base}-{n}"
+    return f"{base}-{n:02d}"
 
 
 def stems(directory, ext=".md"):
