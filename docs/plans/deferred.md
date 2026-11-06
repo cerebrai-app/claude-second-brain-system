@@ -60,7 +60,6 @@ These are gaps in the plan rather than deliberate deferrals, kept here so nothin
 |---|---|---|
 | Install flow (setup steps, defaults chosen by the user vs. built-in starters) | Pending approvals, `capture`, Inbox triage | 01 (to be a new doc) |
 | Triage mechanics, including how an item is converted between implementations ("conversion mechanics TBD") | `capture` trigger and the Inbox | 01 (to be a new doc) |
-| Per-type core fields and relations (doc 01's strawman table) | All implementations | 01 |
 | Reference built-in implementations for each core type | Starter scaffolding at install | 01 |
 | Manifest and migration doc paths are marked "proposed" | Migration implementation | 01, 02 |
 | Doc 05 status: Draft vs. reviewed | | 05 |
