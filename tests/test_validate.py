@@ -510,3 +510,12 @@ def test_slug_is_an_ordinary_field_only_implementations_that_declare_it_have_one
     assert run(b) == []
     b.write(".brain/impls/note/bad.md", "---\nimpl: bad\nextends: note\nversion: 1\nstorage:\n  adapter: markdown\n  path: \"bad/{slug}.md\"\n---\n")
     assert has(run(b), "storage-path", "error", "bad")
+
+
+def test_conversion_marker_shape(b):
+    good = '{"ref": "task:01M6Q8N7BV24V6C5AF3B8Q4R1H", "from": {"impl": "default-task", "path": "tasks/a.md"}, "to": {"impl": "gtd", "path": "tasks/gtd/a.md"}, "at": "2026-11-06T00:00:00Z"}'
+    b.write(".brain/conversions/task-good.json", good)
+    b.write(".brain/conversions/task-bad.json", '{"ref": "nope"}')
+    found = run(b)
+    assert has(found, "half-converted", "warning", "task-good") and not has(found, "conversion-marker", subject="task-good")
+    assert has(found, "conversion-marker", "warning", "task-bad")

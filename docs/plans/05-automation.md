@@ -190,6 +190,10 @@ Use it whenever the destination is known, for example a journal note placed unde
 
 `create_item` accepts `unless_exists: { type, impl?, where: { field: value, ... } }`. Before creating, the plugin looks for an item of that type (and implementation, when given) whose fields equal the `where` values (dotted paths such as `colleague.employer` reach nested fields; archived items do not count). If one exists, the action is **skipped**, logged as `skipped: exists` with the existing ref, and the rule carries on; that ref is what a later action or `as:` binding sees. This is the structural way to make a manual rule idempotent (a daily journal note, say) instead of a `when` condition that Claude judges. The lookup is deterministic: `brainctl find --type note --impl journal --where title=2026-11-06` (doc 11). A vault rule must list the implementation in `unless_exists` in `requires`; `validate` rejects a malformed `unless_exists` (`unless-exists`).
 
+### Built-in template variables *(Decided)*
+
+Besides `as:` bindings, templates can use `{{ today }}` (the date, `YYYY-MM-DD`) and `{{ now }}` (UTC instant), resolved from the evaluation context's time zone (doc 04). They are valid in `value`, `text`, `title`, and the string values of `where` and `unless_exists`, so a daily journal rule needs no hand-resolved placeholder. An unknown variable stops the rule.
+
 ### Using `surface` results as input to later actions
 
 `surface` can collect items for another operation. `as: <name>` binds the result set (ordered `ref`s plus the `fields` and `relations` of each item,

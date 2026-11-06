@@ -19,6 +19,18 @@
 
 Inverses are never stored (a project's tasks come from querying tasks whose `belongs_to` includes it).
 
+### `defaults` (Area, Project)
+
+`defaults` is a map of core type to the implementation id new items of that type use, in the front matter of the Area or Project. Resolution cascades Project, then Area, then the Inbox (the vault-wide default). Keys are core types (Project: only `task` and `note`; Area: any except `person`); values are implementation ids that exist for that type.
+
+```yaml
+defaults:
+  task: gtd-task
+  note: zettel-note
+```
+
+Defaults apply only to **new** items; an existing item changes implementation only by conversion.
+
 ## Status (task, project)
 
 Core values: `open`, `done`, `dropped`. An implementation may add custom values, each mapped to one core value in its `status_values`. Cross-implementation features use the **category** (the core value). A task is **blocked** when any task in `blocked_by` has category `open`; a `blocked_by` cycle is a warning.

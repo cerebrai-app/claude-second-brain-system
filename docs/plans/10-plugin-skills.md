@@ -104,12 +104,12 @@ The vault was wiped and rebuilt through the installed plugin (`claude -p`, steps
 
 Wiped `devinsba/second-brain` and ran steps 1 to 10 headless through the installed plugin (`claude -p`, isolated config, local marketplace). All ten steps behaved as expected and the vault ends with 0 errors and 0 warnings: the `default-*` starters with their `slug` field and Slug section, a `gtd-task` and a `journal` implementation that each declare `slug`, a triage conversion, an interrupted conversion (duplicate-ref error and marker, then finished), sync adoption of a plain file (slug from its file name), a pending entry applied, a date-named journal note created once and skipped on the second run, and an approved script. Findings:
 
-1. **`defaults` syntax is undocumented.** Setting a project's `defaults.task` worked only because the model guessed `defaults: { task: gtd-task }`. Give it one example in the core automation or storage reference.
-2. **Nothing writes pending entries.** `brainctl sync` emits events; the model hand-wrote the pending JSON. Specify who writes it (a `brainctl rules` step, or document the shape).
-3. **Vault rules cannot say "today".** The journal rule had to carry a literal `<today's date>` placeholder, resolved by hand. Needs the template variables already listed under Next steps (`{{ today }}`).
-4. **`brainctl approve --all` does not exist.** TESTING step 9 and the `python` skill mention it; the model recomputed the hash and edited `registry.yml`. Build it or reword.
-5. **The conversion marker layout is the model's own.** The spec only says ref, both bindings and a timestamp; write the file shape down.
-6. **`/brain:run` must be invoked as a slash command.** Asked in prose, the model reported it as unavailable and ran the steps by hand (it is user-only). Not a plugin bug; note it in the headless instructions.
+1. **`defaults` syntax is undocumented.** Setting a project's `defaults.task` worked only because the model guessed `defaults: { task: gtd-task }`. *Fixed:* example added to `core-types.md` (`defaults`).
+2. **Nothing writes pending entries.** `brainctl sync` emits events; the model hand-wrote the pending JSON. *Fixed:* the main session writes it when dispatching the sync event list; the file shape is in the automation reference. A `brainctl` helper to write it is still open.
+3. **Vault rules cannot say "today".** The journal rule had to carry a literal `<today's date>` placeholder, resolved by hand. *Fixed:* `{{ today }}` and `{{ now }}` are built-in template variables (doc 05, automation reference). The full formatter set (`| checklist`) is still open.
+4. **`brainctl approve --all` does not exist.** TESTING step 9 and the `python` skill mention it; the model recomputed the hash and edited `registry.yml`. *Fixed:* `brainctl approve <script> | --all` records the hash in `registry.yml` and keeps its comments.
+5. **The conversion marker layout is the model's own.** The spec only says ref, both bindings and a timestamp; *Fixed:* the shape (doc 11: `ref`, `from`, `to`, `at`) is now in the storage reference and `validate` checks it (`conversion-marker`).
+6. **`/brain:run` must be invoked as a slash command.** Asked in prose, the model reported it as unavailable and ran the steps by hand (it is user-only). Not a plugin bug; the headless instructions in `TESTING.md` already use slash commands.
 
 ## Next steps
 

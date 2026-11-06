@@ -1,6 +1,6 @@
 # 11 — The `brainctl` Helper
 
-Status: **Draft, partly implemented** (`validate`, `sync`, `read`, `list`, `id`, `slug`, `approve-hash`; version 0.1.0) · Depends on: [03](03-storage-contract.md), [05](05-automation.md), [07](07-python-workspace.md), [08](08-core-types.md) · Origin: the first rehearsal ([10](10-plugin-skills.md), findings 1 and 2)
+Status: **Draft, partly implemented** (`validate`, `sync`, `read`, `list`, `id`, `slug`, `approve-hash`, `approve`; version 0.1.0) · Depends on: [03](03-storage-contract.md), [05](05-automation.md), [07](07-python-workspace.md), [08](08-core-types.md) · Origin: the first rehearsal ([10](10-plugin-skills.md), findings 1 and 2)
 
 ## Goal
 
@@ -35,6 +35,7 @@ adopting hand-written files, hashing a script for approval. In the rehearsal, do
 | `find` | `--type`, `--impl`, repeatable `--where field=value` (dotted paths), `--include-archived`. Items whose fields equal the values; exit 1 when none match. The deterministic lookup behind `unless_exists` (doc 05). |
 | `sync` | Detect: scan all bindings and the Archive, match by ref across bindings, diff against the seen state, **adopt** hand-written files and **complete** the identity fields (slug, title, status, created, updated) of items that have an id but lack them (doc 05), and return the sync report and ordered event list. Updates the seen state, except for externally changed items that fail validation (held back so they are reported again). `--no-adopt` reports without editing files; `--dry-run` writes nothing; `--refresh` accepts the current state as seen (no events, no adoption), for use after the plugin's own writes. Script-adapter bindings are read through `client.py` (doc 12, Client); one that cannot be read is reported as incomplete and its items are never reported as missing. The one-minute `rate_limited` retry applies to script calls. |
 | `approve-hash <script>` | The workspace approval hash (below). |
+| `approve <script> \| --all [--by WHO]` | Record the current hash as the approval in `registry.yml` (`approved: {sha256, at, by}`), keeping the file's comments. `--all` covers every script that is unapproved or changed. The skill shows the user the diff first; the command only records the answer. `by` defaults to git `user.email`. |
 | `index rebuild` | Rebuild the derived refs index by scanning frontmatter ids. |
 
 Script adapters (doc 03) are called by the same commands through their JSON protocol, so the skills have one interface whatever the backend.

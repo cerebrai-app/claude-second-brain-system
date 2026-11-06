@@ -77,6 +77,32 @@ def test_approve_hash_matches_the_library(b, capsys):
     assert capsys.readouterr().out.strip() == approval.approval_hash(b.path(".brain/python"), "scripts/a.py")
 
 
+def test_approve_records_the_hash_and_keeps_the_registry_comments(b, capsys):
+    from brainctl import approval
+    b.write(".brain/python/scripts/a.py", "print(1)\n")
+    b.write(".brain/python/scripts/b.py", "print(2)\n")
+    b.write(".brain/python/registry.yml", "# my scripts\nscripts:\n  - { name: a, path: scripts/a.py }\n  - { name: b, path: scripts/b.py }\n")
+    py = b.path(".brain/python")
+    assert cli.main(["--vault", b.root, "approve", "a", "--by", "me@example.com"]) == 0
+    capsys.readouterr()
+    text = b.read(".brain/python/registry.yml")
+    assert text.startswith("# my scripts") and approval.approval_hash(py, "scripts/a.py") in text and "me@example.com" in text
+    assert cli.main(["--vault", b.root, "validate"]) == 0                 # b is still unapproved (a warning)
+    assert "script-unapproved" in capsys.readouterr().out
+    assert cli.main(["--vault", b.root, "approve", "--all", "--by", "me@example.com"]) == 0      # only b needed it
+    assert [x["name"] for x in json.loads(capsys.readouterr().out)["approved"]] == ["b"]
+    assert cli.main(["--vault", b.root, "validate"]) == 0
+    capsys.readouterr()
+    b.write(".brain/python/scripts/a.py", "print(3)\n")                    # a changed since approval
+    assert cli.main(["--vault", b.root, "approve", "--all", "--by", "me@example.com"]) == 0
+    assert [x["name"] for x in json.loads(capsys.readouterr().out)["approved"]] == ["a"]
+
+
+def test_approve_needs_exactly_one_target_and_a_registered_script(b, capsys):
+    assert cli.main(["--vault", b.root, "approve"]) == 2
+    assert cli.main(["--vault", b.root, "approve", "nope"]) == 2
+
+
 def test_not_a_vault_exits_two(tmp_path):
     old = os.getcwd()
     os.chdir(tmp_path)                                 # no .brain in this directory or above it (tmp_path is isolated)

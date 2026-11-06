@@ -34,6 +34,38 @@ There is no always-allow mode and no pre-approved "shape". Approval is per propo
 
 `claude` proposals triggered by sync-detected events (`origin` starts with `external/`) are written to `.brain/automation/pending/<timestamp>-<type>-<impl-id>-<rule-id>.json` instead of interrupting the user; deterministic rules and `when` conditions on those events run immediately. Proposals from the user's own in-session actions are shown right away. `before_delete` rules are never queued. Entries expire (default 14 days) and are re-evaluated against current state before approval.
 
+### Pending entry file
+
+The main session writes the entry when it dispatches the event list that `brainctl sync` returned (`sync` itself only emits events; it never writes proposals). One JSON file per proposal:
+
+```json
+{
+  "id": "20261106T034730Z-note-default-note-propose-topic-tag",
+  "status": "pending",
+  "created": "2026-11-06T03:47:30Z",
+  "expires": "2026-11-20T03:47:30Z",
+  "rule": { "type": "note", "impl": "default-note", "id": "propose-topic-tag" },
+  "event": { "id": "<event id>", "trigger": "capture", "ref": "note:<id>", "origin": "external/note/default-note", "depth": 0 },
+  "instruction": "<the rule's instruction text>",
+  "revision": "<git blob hash of the triggering item when the proposal was made>",
+  "rationale": "<why>",
+  "operations": [ { "op": "set_field", "ref": "note:<id>", "field": "tags", "value": { "topic": "mobile" } } ]
+}
+```
+
+`operations` use the same operation set as built-in actions. `/brain:pending` compares `revision` with the item's current hash before it applies anything, and drops the entry after `expires`.
+
+## Template variables
+
+Rule values may contain `{{ name }}` templates (`value`, `text`, `title`, and the string values of `where` and `unless_exists`). Built-in variables, resolved from the evaluation context (the user's time zone, doc 04):
+
+- `{{ today }}`: the current date, `YYYY-MM-DD`.
+- `{{ now }}`: the current instant, UTC `YYYY-MM-DDThh:mm:ssZ`.
+
+A `surface` binding added with `as: <name>` is available as `{{ <name> }}` to later actions of the same rule. An unknown variable stops the rule with an error.
+
+Example: `unless_exists: { type: note, impl: journal, where: { title: "{{ today }}" } }` with `title: "{{ today }}"` on the `create_item`.
+
 ## Logging
 
 Append one JSON line per rule run to `.brain/automation/log.jsonl` (rule id, trigger, event id, actions, outcome, duration). Record `(rule id, event id)` so a re-delivered event does not apply twice.

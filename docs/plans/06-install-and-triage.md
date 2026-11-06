@@ -169,7 +169,7 @@ suggestion is only a pre-filled choice the user confirms; nothing is applied aut
 5. Update the sync seen state for both bindings so the plugin's own conversion is not later detected as an external change (doc 05).
 
 **Failure.** Step 1 or 2 fails: nothing changed, report. Step 4 fails after 2 succeeded: the item exists twice (doc 03: `resolve` order picks the default binding). The plugin reports it
-and writes a *half-converted* marker to `.brain/conversions/<type>-<id>.json` (git-ignored) holding the ref, the source and target bindings, and a timestamp; re-running triage on that item, or `/brain validate`, finds the
+and writes a *half-converted* marker to `.brain/conversions/<type>-<id>.json` (git-ignored) holding the ref, the `from` and `to` bindings, and a timestamp (the exact shape is in doc 11; `validate` checks it); re-running triage on that item, or `/brain validate`, finds the
 marker and offers to **finish** by retrying the source delete. The marker is removed once the delete succeeds. It never re-creates the item.
 
 **Events (doc 05).** A conversion is an `update` of the existing item, delivered to the **target** implementation's rules, with `changed` including `impl` and the placement relation. It

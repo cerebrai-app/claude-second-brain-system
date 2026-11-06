@@ -149,6 +149,22 @@ def cmd_approve_hash(args):
     return EXIT_OK
 
 
+def cmd_approve(args):
+    from . import approval
+    vault = _vault(args)
+    if bool(args.script) == bool(args.all):
+        print("give a script name or --all (not both)", file=sys.stderr)
+        return EXIT_USAGE
+    by = args.by or util.git_email(vault.root) or "unknown"
+    try:
+        done = approval.approve(vault.path(".brain/python"), None if args.all else [args.script], by, util.now_iso())
+    except (approval.ApprovalError, OSError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    print(util.dumps({"approved": [{"name": n, "sha256": h} for n, h in done], "by": by}))
+    return EXIT_OK
+
+
 def adapter_ops():
     from .adapter import OPERATIONS
     return OPERATIONS
@@ -194,6 +210,11 @@ def build_parser():
     s.add_argument("op", choices=adapter_ops())
     s.add_argument("--args", help="JSON object of arguments")
     s.set_defaults(fn=cmd_adapter)
+    s = sub.add_parser("approve", help="record the current approval hash of a registered script, or of every unapproved or changed one (--all); show the user the diff first")
+    s.add_argument("script", nargs="?")
+    s.add_argument("--all", action="store_true")
+    s.add_argument("--by", help="who approved (default: git user.email)")
+    s.set_defaults(fn=cmd_approve)
     s = sub.add_parser("approve-hash", help="the workspace approval hash of a script (path relative to .brain/python)")
     s.add_argument("script")
     s.set_defaults(fn=cmd_approve_hash)

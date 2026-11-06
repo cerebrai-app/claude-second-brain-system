@@ -1,4 +1,5 @@
 """`brainctl validate`: every mechanical check of the vault (docs/plans/11, the `validate` skill). Read-only."""
+import json
 import os
 import re
 
@@ -646,8 +647,35 @@ def _check_conversions(vault, f):
     if not os.path.isdir(folder):
         return
     for name in sorted(os.listdir(folder)):
-        if name.endswith(".json"):
-            f.warn("half-converted", f".brain/conversions/{name}", "a conversion did not finish; finish it to remove the duplicate item")
+        if not name.endswith(".json"):
+            continue
+        subject = f".brain/conversions/{name}"
+        try:
+            with open(os.path.join(folder, name), encoding="utf-8") as fh:
+                marker = json.load(fh)
+        except (OSError, ValueError):
+            marker = None
+        problems = _marker_problems(marker)
+        if problems:
+            f.warn("conversion-marker", subject, "not a valid conversion marker (" + "; ".join(problems) + ")")
+        ref = marker.get("ref") if isinstance(marker, dict) else None
+        f.warn("half-converted", subject, f"the conversion of {ref or 'an item'} did not finish; finish it to remove the duplicate item")
+
+
+def _marker_problems(marker):
+    """Why a conversion marker (docs/plans/06, Conversion) is malformed: [] when it is fine."""
+    if not isinstance(marker, dict):
+        return ["not a JSON object"]
+    out = []
+    if not isinstance(marker.get("ref"), str) or not REF_RE.match(marker["ref"]):
+        out.append("`ref` must be a <type>:<id> ref")
+    for key in ("from", "to"):
+        side = marker.get(key)
+        if not (isinstance(side, dict) and isinstance(side.get("impl"), str) and isinstance(side.get("path"), str)):
+            out.append(f"`{key}` must have `impl` and `path`")
+    if not isinstance(marker.get("at"), str):
+        out.append("`at` must be a UTC timestamp")
+    return out
 
 
 def _check_gitignore(vault, f):
