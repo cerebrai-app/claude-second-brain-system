@@ -27,7 +27,7 @@ Accept `go`, `change <choice>`, or `cancel`.
 2. Copy `../../starters/<type>/default-<type>.md` (relative to this skill's plugin) to `.brain/impls/<type>/default-<type>.md` for all five types. Copy, never link.
 3. Register the Archive (`archive:archive`) with the chosen adapter.
 4. Create the Inbox: `id: inbox`, `type: area`, `impl: default-area`, `title: Inbox`, `system: true`, `defaults` pointing at the four non-person starters.
-5. Python workspace: follow the `python` skill's init, including copying `../../tools/brainctl/` to `.brain/python/brainctl/`, adding `ruamel.yaml`, locking, and a `.gitkeep` in each empty directory (`scripts/`, `lib/`, `tests/`).
+5. Python workspace: follow the `python` skill's init, including copying `../../tools/brainctl/` to `.brain/python/brainctl/` (the helper's modules only; leave out `test_*.py` and `__pycache__`), adding `ruamel.yaml`, locking, and a `.gitkeep` in each empty directory (`scripts/`, `lib/`, `tests/`).
 6. `.gitignore` entries: `.brain/index/`, `.brain/cache/`, `.brain/automation/seen/`, `.brain/automation/pending/`, `.brain/automation/log.jsonl`, `.brain/conversions/`, `.brain/python/.venv/`, `.brain/python/outputs/`, `__pycache__/`. Keep existing lines; append only missing ones.
 7. **`.brain/manifest.yml` last**: `core_version` of this plugin, empty `migrations`, the `implementations` index. A vault without a manifest is incomplete.
 

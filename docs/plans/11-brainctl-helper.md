@@ -11,7 +11,7 @@ adopting hand-written files, hashing a script for approval. In the rehearsal, do
 ## Shape *(Decided)*
 
 - **Runs in the vault's Python workspace** (doc 07), which is therefore **required**. It uses `ruamel.yaml` (locked in the workspace) so frontmatter round-trips with comments and key order intact.
-- **Shipped in the plugin** at `plugins/brain/tools/brainctl/`; setup **copies** it to `.brain/python/brainctl/`, so the vault pins the version it uses. Its version is recorded in the manifest (`helper_version`); a core migration updates the copy. It is plugin code, not user code: it is not part of a
+- **Shipped in the plugin** at `plugins/brain/tools/brainctl/`; setup **copies** its modules (not its tests) to `.brain/python/brainctl/`, so the vault pins the version it uses. Its version is recorded in the manifest (`helper_version`); a core migration updates the copy. It is plugin code, not user code: it is not part of a
   script's approval hash and cannot be edited through the `python` skill.
 - Invoked through the workspace tool from `.brain/python`, for example `uv run --frozen python -m brainctl <command>`; the skills use the tool recorded in `python.tool`.
 - **Non-interactive.** It never prompts, never commits, and makes no network calls itself (script adapters make their own). Structured input is JSON on stdin; results are JSON on stdout; diagnostics go to stderr; the exit code maps to the storage error codes (doc 03) plus `0` for success.
