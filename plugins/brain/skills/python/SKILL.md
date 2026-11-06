@@ -13,7 +13,7 @@ If a task is deterministic and recurs, make it a script instead of redoing the w
 
 ## Tool and interpreter
 Use the user's package manager: `python.tool` in `.brain/config.yml`, else the tool the workspace already uses (`uv.lock`, `poetry.lock`, `pdm.lock`), else the first installed of `uv`, `poetry`, `pdm`, else `venv` + `pip` with a pinned `requirements.lock` (weakest; say so). Map the four operations: **init**, **add** (dependency + lock), **sync** (environment from the lock, no re-resolve), **run** (in the locked environment).
-Use an existing Python 3.12+; otherwise ask approval to fetch one with the user's tool (`uv`, `pyenv`, `conda`/`mamba`, `pdm`), naming the tool, version and download. If none is available or the user declines, skip the workspace and say what to install.
+Use an existing Python 3.12+; otherwise ask approval to fetch one with the user's tool (`uv`, `pyenv`, `conda`/`mamba`, `pdm`), naming the tool, version and download. If none is available or the user declines, stop and say what to install: the workspace is required, because `brainctl` (the deterministic helper) runs in it.
 
 ## Registry and approval
 `registry.yml` lists each script: `name`, `path`, `description`, `requires_env`, `timeout`, `created_by`, `approved: {sha256, at, by}`. A script not in the registry cannot run. The scrubbed environment passed to a script contains only the variables in `requires_env` plus a minimal base.

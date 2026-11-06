@@ -1,6 +1,6 @@
 # 07 — Python Workspace
 
-Status: **Draft** · Depends on: [03 — Storage Contract](03-storage-contract.md), [05 — Automation](05-automation.md), [06 — Install Flow and Triage](06-install-and-triage.md)
+Status: **Draft** · The workspace is required and hosts the deterministic helper ([11](11-brainctl-helper.md)) · Depends on: [03 — Storage Contract](03-storage-contract.md), [05 — Automation](05-automation.md), [06 — Install Flow and Triage](06-install-and-triage.md)
 
 ## Goal
 
@@ -53,7 +53,7 @@ Rules:
 1. **Use an existing interpreter** that satisfies the minimum, found through the chosen tool first (its managed Pythons, the active environment), then on the `PATH`.
 2. **Otherwise ask for approval to fetch one**, using whatever the user already has: `uv`, `pyenv`, `conda`/`mamba`, `pdm`, or another installer the machine provides. The prompt names the tool, the exact
    version and what will be downloaded, and nothing is fetched without a yes.
-3. **If there is no installer or the user declines**, setup skips the workspace and reports what to install (it is optional; see the install step in doc 06). `/brain python init` can run it later.
+3. **If there is no installer or the user declines**, setup stops before creating anything and reports what to install. The workspace is **required** *(Decided)* because the deterministic helper (doc 11) runs in it.
 
 The migration scripts in doc 02 are independent of this: they run with any `python3 -I`.
 
