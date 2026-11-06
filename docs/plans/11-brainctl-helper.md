@@ -1,6 +1,6 @@
 # 11 — The `brainctl` Helper
 
-Status: **Draft** · Depends on: [03](03-storage-contract.md), [05](05-automation.md), [07](07-python-workspace.md), [08](08-core-types.md) · Origin: the first rehearsal ([10](10-plugin-skills.md), findings 1 and 2)
+Status: **Draft, partly implemented** (`validate`, `sync`, `read`, `list`, `id`, `slug`, `approve-hash`; version 0.1.0) · Depends on: [03](03-storage-contract.md), [05](05-automation.md), [07](07-python-workspace.md), [08](08-core-types.md) · Origin: the first rehearsal ([10](10-plugin-skills.md), findings 1 and 2)
 
 ## Goal
 
@@ -31,7 +31,7 @@ adopting hand-written files, hashing a script for approval. In the rehearsal, do
 | `convert plan <ref> --to <impl>` | The deterministic mapping and report (carried, unmapped, invalid, missing, filled by default), as JSON. |
 | `convert apply <ref> --to <impl>` | With the user's resolutions on stdin: validate, create in the target with the same id, record the native id, delete the source, refresh derived state, and write or clear the half-converted marker. |
 | `validate [--ref R]` | Every mechanical check in the `validate` skill: manifest and config, definitions, items, relations, duplicates across bindings, unadopted files, leftover markers, ignored-path checks, workspace approvals. JSON findings with severity. |
-| `sync` | Detect: scan all bindings, match by ref across bindings, diff against the seen state, **adopt** hand-written files (doc 05), and return the sync report and ordered event list. Updates the seen state only for events it returns. `--no-adopt` reports without writing. Honors the one-minute `rate_limited` retry. |
+| `sync` | Detect: scan all bindings and the Archive, match by ref across bindings, diff against the seen state, **adopt** hand-written files (doc 05), and return the sync report and ordered event list. Updates the seen state, except for externally changed items that fail validation (held back so they are reported again). `--no-adopt` reports without editing files; `--dry-run` writes nothing; `--refresh` accepts the current state as seen (no events, no adoption), for use after the plugin's own writes. Script-adapter bindings are not read yet and are reported as incomplete; the one-minute `rate_limited` retry applies only to them and arrives with them. |
 | `approve-hash <script>` | The workspace approval hash (below). |
 | `index rebuild` | Rebuild the derived refs index by scanning frontmatter ids. |
 
@@ -95,13 +95,17 @@ capture:
 
 **Log line** `.brain/automation/log.jsonl`: `{ "ts", "rule", "trigger", "event", "actions", "outcome", "duration_ms" }`, one per rule run, plus one per helper write (`"command"`, `"ref"`).
 
+## Package layout and tests
+
+The helper is the package `plugins/brain/tools/brainctl/` (`__main__.py` CLI, `model.py` vault and scanning, `schema.py` field types, `validate.py`, `sync.py`, `approval.py`, `ids.py`, `util.py`). Setup copies the package without tests or caches. Its tests are pytest tests in `tests/` (see `TESTING.md`): unit tests for ids, schema, scanning and the approval hash; one test per `validate` check; sync tests for baseline, events, adoption, conversions and refresh; CLI tests including the installed-copy layout.
+
 ## Implementation order
 
 Built incrementally, each step usable alone:
 
-1. `id`, `slug` (done: `ids.py`, with tests).
-2. Parsing, schema loading and `validate` (read-only, safest first).
-3. `read`, `list`, `sync` (detect, then adopt).
+1. ~~`id`, `slug`~~ — done (`ids.py`).
+2. ~~Parsing, schema loading and `validate`~~ — done: front matter, definitions, traits, items, relations, tags, rules, git-ignore, workspace approvals (`validate.py`, `schema.py`, `model.py`).
+3. ~~`read`, `list`, `sync` (detect, then adopt)~~ — done for the markdown adapter and the Archive directory (`sync.py`). Not yet: script adapters, the rate-limit retry.
 4. `create`, `update`, `archive`, `unarchive`, `delete`.
 5. `convert plan` / `convert apply`.
 6. `approve-hash`, `index rebuild`, packaging, and the migration that updates the copy.
@@ -115,6 +119,6 @@ Built incrementally, each step usable alone:
 
 ## Next steps
 
-1. Implement step 2 onward from the list above, starting with `validate`.
+1. Implement step 4 onward from the list above: `create`, `update`, `archive`, `unarchive`, `delete`, then `convert`. Until `create`/`update` exist, the skills write item files by hand and run `sync --refresh`.
 2. Update the skills to call `brainctl` and to forbid hand-writing item files (done in the same change as each command lands).
 3. Add the helper version and copy step to the migration doc (doc 02).

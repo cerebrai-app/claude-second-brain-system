@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A Claude Code **plugin marketplace**: a thin JSON layer (`.claude-plugin/marketplace.json`) that points at one or more plugins, each living under `plugins/<name>/` with its own `.claude-plugin/plugin.json` manifest. There is no build system, package manager, or test suite — the "code" is marketplace/plugin metadata plus whatever skills, commands, agents, or hooks each plugin defines.
+A Claude Code **plugin marketplace**: a thin JSON layer (`.claude-plugin/marketplace.json`) that points at one or more plugins, each living under `plugins/<name>/` with its own `.claude-plugin/plugin.json` manifest. There is no build system or package manager. The "code" is marketplace/plugin metadata plus whatever skills, commands, agents, or hooks each plugin defines, and the `brainctl` helper under `plugins/brain/tools/`, which has a pytest suite in `tests/`.
 
 Currently there is a single plugin, `brain` (`plugins/brain/`), intended to become a "Second Brain System" built around Claude Code. Its design is in `docs/plans/`; its skills (`plugins/brain/skills/`) and starter implementations (`plugins/brain/starters/`) are first drafts that have not been exercised against a real vault yet.
 
@@ -14,7 +14,7 @@ Currently there is a single plugin, `brain` (`plugins/brain/`), intended to beco
 - `plugins/<plugin-name>/.claude-plugin/plugin.json` — per-plugin manifest (`name`, `description`, `version`, `author`). This is what Claude Code reads when a user runs `/plugin install <plugin-name>@<marketplace-name>`.
 - `plugins/<plugin-name>/skills/` — where that plugin's skills live (one subdirectory per skill, each with a `SKILL.md`). The `brain` plugin's skills are listed in `docs/plans/10-plugin-skills.md`; they restate the design docs, so update the matching skill or `core/references/` file whenever a design doc changes. A plugin can also define `commands/`, `agents/`, or `hooks/` directories following the same convention once those are introduced.
 - `plugins/brain/starters/<type>/default-<type>.md` — the built-in starter implementation definitions that `/brain setup` copies into a vault's `.brain/impls/`. Design docs for the whole system are in `docs/plans/` (see `docs/plans/09-starter-implementations.md`).
-- `plugins/brain/tools/brainctl/` — the deterministic helper that `/brain:setup` copies into a vault's `.brain/python/brainctl/` (currently only `ids.py`, with tests: `cd plugins/brain/tools/brainctl && python3 -m unittest -v test_ids`). Spec in `docs/plans/11-brainctl-helper.md`.
+- `plugins/brain/tools/brainctl/` — the deterministic helper (a Python package) that `/brain:setup` copies into a vault's `.brain/python/brainctl/`. It implements `validate`, `sync`, `read`, `list`, `id`, `slug` and `approve-hash`; write commands are not built yet. Spec in `docs/plans/11-brainctl-helper.md`; tests in `tests/` (pytest).
 - Keep plugin and marketplace `version` fields in sync when bumping a plugin's version — the marketplace entry is not derived automatically from the plugin manifest.
 
 ## GitHub Agentic Workflows (gh-aw)
@@ -24,7 +24,7 @@ Currently there is a single plugin, `brain` (`plugins/brain/`), intended to beco
 
 ## Tests
 
-See `TESTING.md`. Quick run: `python3 tests/check_static.py && (cd plugins/brain/tools/brainctl && python3 -m unittest -q test_ids) && python3 tests/rehearsal/scenario.py` (needs PyYAML).
+See `TESTING.md`. Quick run: `uv run --with pytest --with ruamel.yaml pytest` (or `pip install -r tests/requirements.txt && pytest`). The suite needs `git`; the one test marked `workspace` also needs `uv` and network (`-m "not workspace"` skips it).
 
 ## Installing / testing locally
 
@@ -37,4 +37,4 @@ Users consume this repo via:
 
 To test changes locally before publishing, add the marketplace by local path instead of the GitHub slug (`/plugin marketplace add <local-path>`), then reinstall/reload the plugin to pick up changes.
 
-There are no lint/build/test commands in this repo — validate changes by exercising the installed plugin's skills/commands directly in a Claude Code session.
+There are no lint or build commands. Run the pytest suite for the helper, the skills' front matter and the starters, and validate the skills themselves by exercising the installed plugin in a Claude Code session.

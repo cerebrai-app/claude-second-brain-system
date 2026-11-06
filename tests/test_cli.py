@@ -1,0 +1,112 @@
+"""The command line, including running the installed copy the way the skills do: `python -m brainctl` from .brain/python."""
+import json
+import os
+import subprocess
+import sys
+
+import pytest
+
+from brainctl import __main__ as cli
+
+
+def run_cli(b, *args):
+    """Run a command in-process; return (exit code, parsed JSON or text)."""
+    import io
+    import contextlib
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = cli.main(["--vault", b.root, *args])
+    text = out.getvalue()
+    try:
+        return code, json.loads(text)
+    except ValueError:
+        return code, text
+
+
+def test_validate_clean_vault_exits_zero(b):
+    code, out = run_cli(b, "validate")
+    assert code == 0 and out["ok"] is True and out["findings"] == []
+
+
+def test_validate_exits_one_on_errors_but_not_on_warnings(b):
+    b.write("notes/by-hand.md", "# By hand\n")                       # a warning
+    code, out = run_cli(b, "validate")
+    assert code == 0 and out["warnings"] == 1 and out["errors"] == 0
+    b.write("notes/broken.md", "---\ntitle: [x\n---\n")               # an error
+    code, out = run_cli(b, "validate")
+    assert code == 1 and out["ok"] is False and out["errors"] == 1
+
+
+def test_validate_text_output(b):
+    b.write("notes/by-hand.md", "# By hand\n")
+    code, text = run_cli(b, "validate", "--text")
+    assert code == 0 and "unadopted-file" in text and "0 error(s), 1 warning(s)" in text
+
+
+def test_sync_json_and_dry_run(b):
+    b.write("notes/by-hand.md", "# By hand\n")
+    code, out = run_cli(b, "sync", "--dry-run")
+    assert code == 0 and out["report"]["unadopted"] == ["notes/by-hand.md"] and out["events"] == []
+    code, out = run_cli(b, "sync")
+    assert out["report"]["adopted"] == ["notes/by-hand.md"]
+    code, out = run_cli(b, "sync")
+    assert out["events"] == [] and out["report"]["baseline"] is False
+
+
+def test_list_and_read(b):
+    i, _ = b.item("note", "default-note", "notes", "An idea", body="text\n")
+    code, out = run_cli(b, "list")
+    assert f"note:{i}" in [row["ref"] for row in out["items"]]
+    code, out = run_cli(b, "read", f"note:{i}")
+    assert code == 0 and out["items"][0]["front"]["title"] == "An idea" and out["items"][0]["body"] == "text\n"
+    code, out = run_cli(b, "read", "note:missing")
+    assert code == 1 and out["error"] == "not_found"
+
+
+def test_id_and_slug(b, capsys):
+    assert cli.main(["--vault", b.root, "id", "-n", "2"]) == 0
+    assert len(capsys.readouterr().out.split()) == 2
+    assert cli.main(["--vault", b.root, "slug", "Draft Q4 plan", "--taken", "draft-q4-plan"]) == 0
+    assert capsys.readouterr().out.strip() == "draft-q4-plan-02"
+
+
+def test_approve_hash_matches_the_library(b, capsys):
+    from brainctl import approval
+    b.write(".brain/python/scripts/a.py", "print(1)\n")
+    assert cli.main(["--vault", b.root, "approve-hash", "scripts/a.py"]) == 0
+    assert capsys.readouterr().out.strip() == approval.approval_hash(b.path(".brain/python"), "scripts/a.py")
+
+
+def test_not_a_vault_exits_two(tmp_path):
+    old = os.getcwd()
+    os.chdir(tmp_path)                                 # no .brain in this directory or above it (tmp_path is isolated)
+    try:
+        with pytest.raises(SystemExit) as e:
+            cli.main(["validate"])
+        assert e.value.code == 2
+    finally:
+        os.chdir(old)
+
+
+def test_the_installed_copy_runs_from_the_workspace_directory(b):
+    """What the skills do: cd .brain/python and run `python -m brainctl ...`; the vault is found by walking up."""
+    b.install_helper()
+    cwd = b.path(".brain/python")
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    r = subprocess.run([sys.executable, "-m", "brainctl", "validate"], cwd=cwd, capture_output=True, text=True, env=env)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout)["ok"] is True
+    r = subprocess.run([sys.executable, "-m", "brainctl", "id"], cwd=cwd, capture_output=True, text=True, env=env)
+    assert len(r.stdout.strip()) == 26
+    r = subprocess.run([sys.executable, "-I", ".brain/python/brainctl/ids.py", "ulid"], cwd=b.root, capture_output=True, text=True, env=env)
+    assert len(r.stdout.strip()) == 26                                  # ids.py also works standalone, as the core skill uses it
+    assert not os.path.exists(b.path(".brain/python/brainctl/test_ids.py"))
+
+
+def test_sync_refresh_flag(b):
+    run_cli(b, "sync")
+    b.write("notes/n.md", "# N\n")
+    code, out = run_cli(b, "sync", "--refresh")
+    assert code == 0 and out["events"] == [] and out["report"]["adopted"] == []
+    code, out = run_cli(b, "sync", "--refresh", "--dry-run")
+    assert code == 2 and out["error"] == "invalid"

@@ -25,8 +25,24 @@ Detail lives in the reference files next to this skill. Read the one you need be
 7. **Show diffs, then apply.** For anything beyond a trivial edit, show the user what will change. Changes proposed by Claude actions need per-proposal approval (see the automation reference).
 8. **Keep derived state out of git.** `.brain/index/`, `.brain/cache/`, `.brain/automation/seen|pending|log.jsonl`, `.brain/conversions/`, `.brain/python/.venv/` are ignored; never commit them.
 9. **Do not commit unless the user asks** (setup and triage offer a commit at the end).
-10. **Ids and slugs come from the helper, never from you.** New ULID: `python3 -I .brain/python/brainctl/ids.py ulid`. New slug (unique in the target directory): `python3 -I .brain/python/brainctl/ids.py slug "<title>" --dir <directory>`. Never invent an id.
-11. **Keep derived state in step after every write** until `brainctl` (see `docs/plans/11-brainctl-helper.md`) does it for you: refresh `updated` (and `completed` when a task or project's status category changes), update the sync seen state for the item, the refs index, and the id index for script adapters. Forgetting the seen state makes sync report your own edits as outside changes.
+10. **Ids and slugs come from the helper, never from you.** New ULID: `python3 -I .brain/python/brainctl/ids.py ulid`. New slug (unique in the target directory): `python3 -I .brain/python/brainctl/ids.py slug "<title>" --dir <directory>`. Never invent an id. Quote a title or slug in YAML when the plain form would load as another type (`2026-11-06`, `yes`, `010`).
+11. **Keep derived state in step after every write** until `brainctl` has `create`/`update`: refresh `updated` (and `completed` when a task or project's status category changes), then run `brainctl sync --refresh` so the sync seen state accepts your own write. Forgetting it makes the next sync report your edit as an outside change.
+12. **Check your work with `brainctl validate`** after changes that touch several items, and before offering a commit.
+
+## Running `brainctl`
+
+`brainctl` is the deterministic helper copied into the vault at `.brain/python/brainctl/` (spec: `docs/plans/11-brainctl-helper.md`). Run it from `.brain/python` through the workspace tool recorded in `python.tool` in `.brain/config.yml`, using the locked environment without re-resolving: for `uv`, `uv run --frozen python -m brainctl <command>`; for `poetry`, `poetry run python -m brainctl <command>`; for `pdm`, `pdm run python -m brainctl <command>`. It finds the vault by walking up. Output is JSON on stdout (add `--text` for people); exit code 0 is success, 1 means findings or not found, 2 is a usage error.
+
+| Command | Use |
+|---|---|
+| `validate [--ref R]` | Every mechanical check of the vault; exit 1 if any error. Read-only. |
+| `sync [--no-adopt] [--dry-run]` | Detect outside changes, adopt hand-written files, update the seen state; returns `events` and a `report`. |
+| `sync --refresh` | Accept the current state as seen (no events, no adoption), after your own writes. |
+| `list`, `read <ref>` | Items across bindings and the Archive. |
+| `id [-n N]`, `slug <title> [--dir D]` | New ULIDs and unique slugs. |
+| `approve-hash <script>` | The workspace approval hash. |
+
+Not available yet: `create`, `update`, `archive`, `unarchive`, `delete`, `convert`. Until they exist, write item files by hand following these rules, then `sync --refresh` and `validate`. Script-adapter bindings are not read yet; `sync` and `validate` report them as incomplete/skipped.
 
 ## Defaults for new items
 

@@ -88,7 +88,7 @@ through `/brain:*` itself. The vault commits are the record.
 
 ## Next steps
 
-1. Implement `brainctl` (doc 11, from `validate` onward) and move the skills onto it.
+1. Continue `brainctl` (doc 11): `create`, `update`, `archive`, `unarchive`, `delete`, `convert`. The `validate`, `sync` and `core` skills already call it.
 2. Define template variables and formatters for rules (`{{ today }}`, `| checklist`).
 3. Write the migration skill (and the session-start hook).
 4. Write `brain_adapter.py` and the workspace starter files.

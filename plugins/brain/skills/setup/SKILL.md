@@ -36,4 +36,4 @@ Do not create `.brain/automation.yml`; it is created on first use. The only thir
 After writing `.gitignore`, run `git check-ignore -v` on `.brain/python/lib/x.py`, `.brain/id-index/x.json`, `.brain/impls/task/x.md` and an item path; if any is ignored (a Python `.gitignore` template ignores `lib/`), append a negation (for example `!.brain/python/lib/`). Skip appended lines whose effect already holds.
 
 ## Finish
-After confirmation, make **one** git commit ("brain: initial setup") and report the vault summary. The first sync builds its baseline silently; it does not emit `create` events.
+Run `brainctl validate` (and `brainctl sync` to build the silent baseline). Fix any error before committing; do not commit a vault that does not validate. After confirmation, make **one** git commit ("brain: initial setup") and report the vault summary. The first sync builds its baseline silently; it does not emit `create` events.
