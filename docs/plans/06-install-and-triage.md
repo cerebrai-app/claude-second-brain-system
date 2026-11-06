@@ -91,7 +91,7 @@ it is absent (doc 03). The sync seen state (doc 05) can narrow the scan for larg
 
 - The type defaults to `note`; `--type task` (and so on) overrides it. The implementation is the Inbox `defaults.<type>` (doc 01 resolution, step 3).
 - The item is created with no placement relation, so it is in the Inbox. This fires `create` and `capture` (doc 05).
-- `--trait <name>` (repeatable) attaches traits at creation, for types where traits are enabled (Person in the MVP); the trait's required fields are prompted for. A new item otherwise starts with no traits (doc 01).
+- `--trait <name>` (repeatable) attaches traits at creation, for `--type person` only; the trait's required fields are prompted for. A new item otherwise starts with no traits (doc 01).
 - **`--type person` is the exception:** a person is top-level, so it is created with the vault's active person implementation, is not in the Inbox, fires `create` only (no `capture`), and is never offered for triage.
 - Items created outside the plugin that land in the Inbox are detected by sync and fire `capture` as well (`origin: external/...`), but **do not** trigger the inline
   offer below; they simply appear in the triage backlog.
