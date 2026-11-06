@@ -39,6 +39,10 @@ tags:
 - **Values** are strings, not normalized. A bare tag has the empty string as its value.
 - **Shorthand on input:** a list of names (`tags: [urgent, work/acme]`) is accepted and normalized to the map with empty-string values. Scalar YAML values (numbers, booleans, dates) are converted to their string
   form; a list or map as a value is an error.
+- **External backends** *(Decided)*. Where a backend can store tags only as names (labels), the implementation keeps the tag **values** in an **implementation-specific side field**: a field of the backend (a custom property, a
+  description block, a metadata column) that the implementation names in its definition as `storage.tag_values_field`. Names go to the native labels, values go to the side field, and the adapter recombines them on read, so
+  the `Map<String, String>` round-trips. A backend that stores key/value tags natively needs no side field. An implementation whose adapter reports `tags: "labels"` (doc 03) without declaring `tag_values_field` is refused at
+  binding rather than silently dropping values.
 - Tags are unvalidated labels with no schema. They are not traits (doc 01, Person only; traits add namespaced, validated fields) and not relations (links to other items). Filters, sorts and rule `match` can test a tag's presence, name and value.
 
 ## Status values and categories *(Decided)*
@@ -198,11 +202,11 @@ Where a name is a core name for one type (for example `owner` on Project) it is 
 2. ~~Person `name`~~ — resolved: **structured** (`given`, `middle`, `family`, `nickname`, `display`, at least one non-empty).
 3. ~~Dates~~ — resolved: add a core **`completed`** timestamp to Task and Project, maintained by the plugin; `due` and `start` stay implementation fields.
 4. ~~Maximum `Area.parent` depth~~ — resolved: **no maximum** (cycles are still an error).
-5. **Tag values on external backends.** Backends with label-only tags cannot store values (key/value label systems fit the string map directly). Does an adapter drop the values, store them in a side field, or declare `supports_tag_values: false` (doc 03) and be refused for implementations that use them?
+5. ~~Tag values on external backends~~ — resolved: label-only backends keep the values in an **implementation-specific side field** (`storage.tag_values_field`), recombined on read; a missing declaration is refused at binding.
 
 ## Next steps
 
-1. Resolve open question 5 (tag values on external backends).
+1. ~~Resolve the open questions~~ — done.
 2. ~~Replace doc 01's strawman table with a summary that links here~~ — done. Update the doc 03 envelope example to show `tags` as a map and `completed` for tasks.
 3. Write the built-in `default-*` starter implementations against these fields.
 4. Cross-check the rules in docs 04 and 05 that name fields and relations (for example the `blocked` computation and `source`/`due` examples).
