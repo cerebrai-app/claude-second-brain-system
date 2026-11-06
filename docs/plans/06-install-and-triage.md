@@ -1,6 +1,6 @@
 # 06 — Install Flow and Triage
 
-Status: **Draft** · Depends on: [01 — Core Data Model](01-core-data-model.md), [02 — Versioning and Migrations](02-versioning-and-migrations.md), [03 — Storage Contract](03-storage-contract.md), [05 — Automation](05-automation.md)
+Status: **Draft** · Depends on: [01 — Core Data Model](01-core-data-model.md), [02 — Versioning and Migrations](02-versioning-and-migrations.md), [03 — Storage Contract](03-storage-contract.md), [05 — Automation](05-automation.md) · See also: [07 — Python Workspace](07-python-workspace.md)
 
 ## Goal
 
@@ -30,6 +30,7 @@ Setup asks **one** question. It shows a summary of what it will create and asks 
 | Archive adapter | **Built-in `markdown` adapter** in the brain repo, at `archive/{type}/{impl}/{id}.md` (doc 03). The adapter is fixed at install; this is the only place it is chosen, so the summary states it plainly. A user who wants a `script` adapter edits the summary's choice before confirming; it must report `archive_adapter: true` (doc 03) or setup refuses it. |
 | Inbox `defaults` | One built-in starter implementation per placed core type: `default-task`, `default-note`, `default-project`, `default-area`. (There is no `person` default; see next row.) |
 | Person implementation | Exactly one per vault *(Decided)*: `default-person`, `markdown` storage in its own directory, `people/{id}.md`. |
+| Python workspace | Created at `.brain/python/` with the package manager detected on the machine (`uv`, `poetry`, `pdm`, else `venv` + `pip`), shown in the summary and changeable before confirming (doc 07). Optional: skipped, with a message, if no suitable Python is found. |
 
 The summary lists the files to be created and the defaults above. The user may answer *go*, *change <choice>*, or *cancel*. Everything after install is changed
 by editing files (or asking Claude to), not by a setup wizard: Inbox `defaults` live on the Inbox area item and are validated like any `defaults` (doc 01);
@@ -44,13 +45,14 @@ In this order, so an interrupted run is recoverable:
    (`plugins/brain/`). Copied, not linked, so the vault owns them (doc 01, Ownership). Each starts at `version: 1`.
 3. The **Archive** (`archive:archive`), registered with the chosen Archive adapter (doc 03).
 4. The **Inbox** area item (`area:inbox`, `system: true`) with `defaults` for each core type pointing at the starters. It is stored by `default-area`'s binding.
-5. `.gitignore` entries for derived, rebuildable state: `.brain/index/`, `.brain/cache/`, `.brain/automation/seen/`, `.brain/automation/pending/`,
-   `.brain/automation/log.jsonl`, `.brain/conversions/`. (`.brain/id-index/` is committed, doc 03.) Existing entries are kept; missing ones appended.
-6. **`.brain/manifest.yml` last** (doc 02): `core_version` = the plugin's current core version, empty `migrations`, and the `implementations` index for the starters.
+5. The **Python workspace** (doc 07), if a suitable Python and tool are found: `.brain/python/` with `pyproject.toml`, the lock file, an empty `registry.yml`, the agents' `README.md`, and empty `scripts/`, `lib/` and `tests/`. The detected tool is recorded as `python.tool` in `config.yml`. Setup installs no third-party packages (the starting project has no dependencies). If no Python or tool is found, this step is skipped and reported; `/brain python init` can run it later.
+6. `.gitignore` entries for derived, rebuildable state: `.brain/index/`, `.brain/cache/`, `.brain/automation/seen/`, `.brain/automation/pending/`,
+   `.brain/automation/log.jsonl`, `.brain/conversions/`, `.brain/python/.venv/`, `.brain/python/outputs/`, `__pycache__/`. (`.brain/id-index/` and the rest of `.brain/python/` are committed.) Existing entries are kept; missing ones appended.
+7. **`.brain/manifest.yml` last** (doc 02): `core_version` = the plugin's current core version, empty `migrations`, and the `implementations` index for the starters.
 
 `.brain/automation.yml` (vault-level automation, doc 05) is **not** created at install; it is created on first use.
 
-The manifest is written last on purpose: a vault without a manifest is *incomplete*, so a failed setup is re-runnable. On re-run, setup detects which of steps 1 to 5
+The manifest is written last on purpose: a vault without a manifest is *incomplete*, so a failed setup is re-runnable. On re-run, setup detects which of steps 1 to 6
 already exist, validates them against the same defaults, creates only the missing pieces, and then writes the manifest. If an existing file conflicts with what setup
 would have written (for example a hand-edited `config.yml` with a different Archive adapter), setup stops and asks rather than replacing it.
 
@@ -65,6 +67,7 @@ silently, so installing into an existing repo of notes causes no `create` event 
 - Exactly one Archive; the Inbox exists, is an Area, and cannot be deleted; its `defaults` name implementations that exist.
 - Impl ids are unique within each core type (doc 03), and there is exactly one **active** `person` implementation (plus at most one flagged `migration_target`, doc 01).
 - Required `.gitignore` entries present.
+- If `.brain/python/` exists: `pyproject.toml` and the lock file are present, the lock matches the project, and every registered script exists and is approved at its current hash (otherwise reported as *changed since approval* or *never approved*).
 - No leftover half-converted markers in `.brain/conversions/` (each offers to finish its conversion).
 
 Fixes (for example re-creating a deleted starter definition or the Inbox) are shown as a proposal and applied only on approval. A missing or mismatched Archive adapter is

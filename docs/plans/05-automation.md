@@ -214,7 +214,7 @@ Example: write today's actionable tasks into the daily journal note.
 Runs a user executable from the brain repo with the event as JSON on stdin and a JSON result on stdout, using the same conventions as
 script adapters (doc 03): one process per call, timeout, error codes, credentials from environment, stderr surfaced on failure.
 A hook may return **operations** (the same operation set as the built-ins, e.g. `{"op":"set_field",...}`), which the plugin validates and applies
-itself, or just `{"ok":true}` if it acts on the outside world. The plugin shows the command and requires confirmation before the first
+itself, or just `{"ok":true}` if it acts on the outside world. A hook's `run:` may be a path to any executable or `python:<name>`, a registered script in the vault's Python workspace (doc 07), which then follows that doc's approval flow. The plugin shows the command and requires confirmation before the first
 run of a new or changed hook.
 
 ### `claude` (natural-language instruction)

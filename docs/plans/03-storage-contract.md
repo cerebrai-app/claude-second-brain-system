@@ -108,7 +108,7 @@ The plugin adapts to capabilities (e.g. refuses to bind an implementation with `
 
 ## `script` adapter (external systems)
 
-For Linear, Trello, or anything else. The binding points at an executable; the plugin invokes it **once per operation**
+For Linear, Trello, or anything else. The binding points at an executable, or `python:<name>`, a registered script in the vault's Python workspace (doc 07), which can use third-party SDKs and follows that doc's approval flow; the plugin invokes it **once per operation**
 (no long-lived process), with the operation and arguments as JSON on stdin and the result as JSON on stdout.
 
 ```yaml

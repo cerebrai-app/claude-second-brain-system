@@ -193,7 +193,7 @@ migration report. Rules whose required implementation disappears are marked *blo
 3. ~~Dry run~~ — resolved: yes, see Dry run below.
 4. ~~Item-level `schema_version`~~ — resolved: **no**. Not every storage backend can persist per-object fields, so migration state is tracked at the repo level only (manifest) and recovery relies on idempotent scripts and git. Items do not record an implementation `version` either.
 
-5. ~~Script language~~ — resolved: **Python 3, standard library only**, run with `python3 -I`. Generated script is `migrate.py`.
+5. ~~Script language~~ — resolved: **Python 3, standard library only**, run with `python3 -I`. Generated script is `migrate.py`. This is separate from the vault's managed Python workspace (doc 07), whose scripts and `lib/` are user code listed under *Unhandled items*.
 6. ~~Dry-run retention~~ — resolved: dry-run folders are **kept and committed** with the migration as an audit trail.
 
 ## Next steps
