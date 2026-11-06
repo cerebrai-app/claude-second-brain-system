@@ -103,15 +103,6 @@ def cmd_adapter(args):
     return EXIT_OK
 
 
-def _dig(front, dotted):
-    node = front
-    for part in dotted.split("."):
-        if not isinstance(node, dict) or part not in node:
-            return None
-        node = node[part]
-    return node
-
-
 def cmd_find(args):
     """Items matching a type, an optional impl and field equalities: the structural check behind `unless_exists`."""
     vault = _vault(args)
@@ -122,25 +113,10 @@ def cmd_find(args):
             return EXIT_USAGE
         key, value = pair.split("=", 1)
         wanted[key] = value
-    scan = vault.scan()
-    rows = []
-    for item in scan.items:
-        if item.type != args.type or (args.impl and item.impl != args.impl) or (item.archived and not args.include_archived):
-            continue
-        if all(_same(_title_aware(item, k), v) for k, v in wanted.items()):
-            rows.append({"ref": item.ref, "impl": item.impl, "path": item.relpath, "archived": item.archived, "title": item.title})
+    found, scan = store.find_items(vault, args.type, args.impl, wanted, args.include_archived)
+    rows = [{"ref": item.ref, "impl": item.impl, "path": item.relpath, "archived": item.archived, "title": item.title} for item in found]
     print(util.dumps({"ok": True, "count": len(rows), "items": rows, "incomplete": [{"binding": f"{t}/{n}", "reason": r} for t, n, r in scan.skipped]}))
     return EXIT_OK if rows else EXIT_FINDINGS
-
-
-def _title_aware(item, key):
-    return item.title if key == "title" and item.type == "person" else _dig(item.front, key)
-
-
-def _same(actual, wanted):
-    if actual is None:
-        return False
-    return str(util.jsonable(actual)).strip() == wanted if not isinstance(actual, (dict, list)) else util.dumps(util.jsonable(actual)) == wanted
 
 
 def cmd_approve_hash(args):

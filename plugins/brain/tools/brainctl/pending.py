@@ -54,18 +54,58 @@ def apply_operation(vault, op):
     if kind == "unarchive":
         _need(op, "ref")
         return store.unarchive(vault, op["ref"])
+    return _create_item(vault, op)
+
+
+PLACEMENT = {"task": "belongs_to", "note": "about", "project": "area"}
+
+
+def _resolve_place(vault, place, for_type):
+    """The ref a `place:` points at: a ref (or list of refs), or {find: {type, impl?, where}, create_if_missing}."""
+    relation = PLACEMENT.get(for_type)
+    if relation is None:
+        raise StoreError("invalid", f"a {for_type} is top-level and is never placed")
+    if isinstance(place, (str, list)):
+        return relation, store._as_list(place), None
+    find = place.get("find") if isinstance(place, dict) else None
+    if not isinstance(find, dict) or not find.get("type"):
+        raise StoreError("invalid", "place must be a ref or {find: {type, where}, create_if_missing}")
+    where = dict(find.get("where") or {})
+    rows, _scan = store.find_items(vault, find["type"], find.get("impl"), where)
+    if len(rows) > 1:
+        raise StoreError("conflict", f"place matches more than one {find['type']}: " + ", ".join(r.ref for r in rows))
+    if rows:
+        return relation, [rows[0].ref], None
+    if not place.get("create_if_missing"):
+        raise StoreError("not_found", f"place finds no {find['type']} matching {where}")
+    if any("." in key for key in where):
+        raise StoreError("invalid", "create_if_missing needs plain field names in `where`")
+    made = store.create(vault, dict(where, type=find["type"], **({"impl": find["impl"]} if find.get("impl") else {})))
+    return relation, [made["ref"]], made["ref"]
+
+
+def _create_item(vault, op):
     _need(op, "type")
+    unless = op.get("unless_exists")
+    if unless:
+        if not isinstance(unless, dict) or not unless.get("type") or not isinstance(unless.get("where"), dict) or not unless["where"]:
+            raise StoreError("invalid", "unless_exists needs a `type` and a non-empty `where`")
+        rows, _scan = store.find_items(vault, unless["type"], unless.get("impl"), unless["where"])
+        if rows:
+            return {"ok": True, "command": "create_item", "skipped": "exists", "ref": rows[0].ref, "path": rows[0].relpath}
     spec = dict(op.get("fields") or {})
     spec["type"] = op["type"]
-    for key in ("impl", "body"):
+    for key in ("impl", "body", "title", "name"):
         if key in op:
             spec[key] = op[key]
-    if "title" in op:
-        spec["title"] = op["title"]
-    if "place" in op and isinstance(op["place"], (str, list)):
-        relation = "area" if op["type"] == "project" else "belongs_to" if op["type"] == "task" else "about"
-        spec.setdefault(relation, op["place"])
-    return store.create(vault, spec)
+    created_placement = None
+    if op.get("place"):
+        relation, targets, created_placement = _resolve_place(vault, op["place"], op["type"])
+        spec.setdefault(relation, targets)
+    result = store.create(vault, spec)
+    if created_placement:
+        result["created_placement"] = created_placement
+    return result
 
 
 # ---- the queue --------------------------------------------------------------------------------------------------------

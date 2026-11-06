@@ -312,3 +312,34 @@ def test_log_lines_use_the_vocabulary(b, v):
             pending.append_log(v, bad)
     line = json.loads(open(b.path(".brain/automation/log.jsonl")).read().splitlines()[-1])
     assert line["outcome"] == "skipped" and line["reason"] == "exists" and line["rule"] == "vault/r" and line["ts"]
+
+
+def test_create_item_unless_exists_and_place(b, v):
+    b.impl("note", "journal", path="journal/{slug}.md")
+    op = {"op": "create_item", "type": "note", "impl": "journal", "title": "2026-11-06",
+          "unless_exists": {"type": "note", "impl": "journal", "where": {"title": "2026-11-06"}},
+          "place": {"find": {"type": "area", "where": {"title": "Journals"}}, "create_if_missing": True}}
+    first = pending.apply_operation(b.vault(), op)
+    assert first["path"] == "journal/2026-11-06.md" and first["created_placement"].startswith("area:")
+    area = first["created_placement"]
+    assert front(b, first["path"])["about"] == [area] and front(b, "areas/journals.md")["title"] == "Journals"
+    second = pending.apply_operation(b.vault(), op)                                      # idempotent: skipped, nothing created
+    assert second["skipped"] == "exists" and second["ref"] == first["ref"]
+    assert sorted(os.listdir(b.path("journal"))) == ["2026-11-06.md"] and sorted(os.listdir(b.path("areas"))) == ["inbox.md", "journals.md"]
+    third = pending.apply_operation(b.vault(), dict(op, title="2026-11-07", unless_exists={"type": "note", "impl": "journal", "where": {"title": "2026-11-07"}}))
+    assert front(b, third["path"])["about"] == [area] and "created_placement" not in third          # the existing area is found, not duplicated
+    assert lint(b) == []
+
+
+def test_place_errors(b, v):
+    with pytest.raises(StoreError) as e:
+        pending.apply_operation(v, {"op": "create_item", "type": "note", "title": "x", "place": {"find": {"type": "area", "where": {"title": "Nope"}}}})
+    assert e.value.code == "not_found" and not os.path.exists(b.path("notes"))
+    with pytest.raises(StoreError) as e:
+        pending.apply_operation(v, {"op": "create_item", "type": "area", "title": "x", "place": "area:inbox"})
+    assert e.value.code == "invalid"
+    store.create(v, {"type": "area", "title": "Dup"})
+    store.create(v, {"type": "area", "title": "Dup"})
+    with pytest.raises(StoreError) as e:
+        pending.apply_operation(v, {"op": "create_item", "type": "note", "title": "x", "place": {"find": {"type": "area", "where": {"title": "Dup"}}}})
+    assert e.value.code == "conflict"

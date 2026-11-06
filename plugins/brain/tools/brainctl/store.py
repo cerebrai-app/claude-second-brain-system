@@ -11,7 +11,7 @@ import os
 import re
 
 from . import ids, schema, sync as sync_mod, util, validate as validate_mod
-from .model import CORE_RELATIONS, CORE_STATUS, CORE_TYPES, COMMON_FIELDS, STATUS_TYPES, TYPE_FIELDS, Item, RESERVED
+from .model import CORE_RELATIONS, CORE_STATUS, CORE_TYPES, COMMON_FIELDS, REF_RE, STATUS_TYPES, TYPE_FIELDS, Item
 
 # keys the helper maintains; a caller may not set them
 MANAGED = ("id", "slug", "created", "updated", "revision", "archive", "archived_at", "completed")
@@ -44,6 +44,8 @@ def _scalar(value, key=None):
     if value is None:
         return "null"
     if key in TIMESTAMP_KEYS and isinstance(value, str) and ISO_RE.match(value):
+        return value
+    if isinstance(value, str) and REF_RE.match(value):          # type:id refs are valid plain YAML strings
         return value
     return util.yaml_scalar(value)
 
@@ -330,7 +332,7 @@ def log(vault, command, ref=None, outcome="ok", **extra):
 
 def _result(vault, item, command, warnings=(), **extra):
     return dict({"ok": True, "command": command, "ref": item.ref, "path": item.relpath, "revision": item.revision,
-                 "front": util.jsonable(item.front), "warnings": [w["message"] for w in warnings]}, **extra)
+                 "front": util.jsonable(item.front), "body_length": len(item.body), "warnings": [w["message"] for w in warnings]}, **extra)
 
 
 def _fail_validation(errors, command):
@@ -686,3 +688,36 @@ def revision_of(vault, ref):
         return find_item(vault, ref, archived_ok=True).revision
     except StoreError:
         return None
+
+
+# ---- lookups (the structural check behind `unless_exists` and `place`) ------------------------------------------------
+
+def dig(front, dotted):
+    node = front
+    for part in dotted.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return None
+        node = node[part]
+    return node
+
+
+def same(actual, wanted):
+    """Does a stored field value equal the wanted one (a string from the command line, or a JSON scalar)?"""
+    if actual is None:
+        return False
+    if isinstance(actual, (dict, list)):
+        return util.dumps(util.jsonable(actual)) == wanted
+    return str(util.jsonable(actual)).strip() == str(wanted).strip()
+
+
+def title_aware(item, key):
+    return item.title if key == "title" and item.type == "person" else dig(item.front, key)
+
+
+def find_items(vault, type_, impl=None, where=None, include_archived=False):
+    """Items of a type (and implementation) whose fields equal the `where` values; dotted paths reach nested fields."""
+    scan = vault.scan()
+    rows = [i for i in scan.items
+            if i.type == type_ and (not impl or i.impl == impl) and (include_archived or not i.archived)
+            and all(same(title_aware(i, k), v) for k, v in (where or {}).items())]
+    return rows, scan
