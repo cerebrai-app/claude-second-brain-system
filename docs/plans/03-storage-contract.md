@@ -97,7 +97,7 @@ The plugin adapts to capabilities (e.g. refuses to bind an implementation with `
 
 - Storage in the brain repo as one markdown file per item, YAML frontmatter + body (format in doc 01).
 - **Path template** from the binding, e.g. `tasks/{slug}.md` or `tasks/{status}/{slug}.md`. Placeholders:
-  - `{slug}`: the item's human-readable `slug` (doc 08), the default file name. Fixed at creation, unique within the directory the path renders to.
+  - `{slug}`: the item's `slug` field (doc 08), the default file name. Only an implementation that declares a `slug` field in its schema may use it (the default implementations do). Fixed at creation, unique within the directory the path renders to.
   - `{id}`, `{type}`, `{impl}`, or any scalar field of the item.
   - `{field:FORMAT}` for a `date` or `datetime` field (or `created` / `updated`), using these `strftime` codes: `%Y %m %d %H %M %S`. For example `journal/{date}.md` for a `date` field (a `date` renders as `YYYY-MM-DD` by default) or `journal/{created:%Y-%m-%d}.md`.
   - A rendered path segment is sanitized: `/`, NUL and control characters become `-`, and an empty result is an error. A path that renders to an existing file of a **different item** is a collision: for `{slug}` the plugin picks the next free suffix at creation (`-02`, `-03`, zero-padded); any other template fails with `conflict`.
@@ -106,7 +106,7 @@ The plugin adapts to capabilities (e.g. refuses to bind an implementation with `
   index (`.brain/index/refs.json`, git-ignored, rebuildable by scanning frontmatter `id`s) and falls back to a scan on miss.
 - **Revision:** git blob hash of the file's content as read (or content hash if not in a git repo).
 - **Atomic writes:** write temp file in the same directory, then rename. No partial files on crash.
-- **As Archive adapter:** may be chosen as the vault's Archive adapter (it satisfies the requirements below). Archived items are stored at `archive/{type}/{impl}/{slug}.md` (configurable via the Archive binding's `path`), with the same frontmatter format, plus `archive`/`archived_at`.
+- **As Archive adapter:** may be chosen as the vault's Archive adapter (it satisfies the requirements below). Archived items are stored at `archive/{type}/{impl}/{slug}.md` (configurable via the Archive binding's `path`; an item whose implementation has no `slug` field is named by its `id` there), with the same frontmatter format, plus `archive`/`archived_at`.
 - **Delete:** permanently removes the file. Only on explicit `confirm: "permanent"`; git history still holds prior content, but the adapter does not rely on that.
 - Preserves unknown frontmatter keys and key order on round trip.
 - Git commits are **not** made by the adapter. Committing is the caller's concern (e.g. a skill or automation).

@@ -174,6 +174,8 @@ def _check_storage(vault, impl, f):
             names = util.template_names(template)
             if "slug" not in names and "id" not in names:
                 f.error("storage-path", subject, "the path template must include {slug} or {id} so every item has its own file")
+            if "slug" in names and "slug" not in impl.fields:
+                f.error("storage-path", subject, "the path template uses {slug} but the implementation declares no `slug` field in schema.fields")
             if not template.endswith(".md"):
                 f.warn("storage-path", subject, "the path template should end with .md")
     elif adapter == "script":
@@ -274,12 +276,13 @@ def _check_item(vault, scan, item, refs, f):
     stem = os.path.splitext(os.path.basename(item.relpath))[0]
     slug = front.get("slug")
     template = impl.path_template or ""
-    if slug is not None and not isinstance(slug, str):
-        w("slug-type", f"slug is read as a {type(slug).__name__}, not a string; quote it (slug: \"{slug}\")")
-    elif not isinstance(slug, str) or not slug:
-        w("slug-missing", "slug is missing")
-    elif "{slug}" in template and not item.archived and stem != slug:
-        w("slug-mismatch", f"slug {slug!r} differs from the file name {stem!r}")
+    if "slug" in impl.fields:      # slug is an ordinary field; only implementations that declare it have one
+        if slug is not None and not isinstance(slug, str):
+            w("slug-type", f"slug is read as a {type(slug).__name__}, not a string; quote it (slug: \"{slug}\")")
+        elif not isinstance(slug, str) or not slug:
+            w("slug-missing", "slug is missing")
+        elif "{slug}" in template and not item.archived and stem != slug:
+            w("slug-mismatch", f"slug {slug!r} differs from the file name {stem!r}")
     for key in ("created", "updated"):
         value = front.get(key)
         if value is None:

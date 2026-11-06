@@ -124,6 +124,8 @@ class Builder:
         """Add an implementation definition. `fields` and `extra` are YAML text (already indented for the front matter)."""
         path = f"{type_}s/{name}/{{slug}}.md" if path is None else path
         text = f"---\nimpl: {name}\nextends: {type_}\nversion: {version}\n"
+        if "slug" in path and "    slug:" not in fields:      # default impls declare the slug field; so do test impls that use {slug}
+            fields = "    slug: { type: string }\n" + fields
         if fields:
             text += f"schema:\n  fields:\n{fields}"
         text += f'storage:\n  adapter: markdown\n  path: "{path}"\n{extra}---\n'

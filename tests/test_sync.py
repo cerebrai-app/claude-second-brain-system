@@ -314,3 +314,12 @@ def test_completing_a_known_item_is_reported_as_an_update(b):
     b.write("notes/scribble.md", open(b.path("notes/scribble.md")).read().replace("slug: scribble\n", ""))
     result = run(b)
     assert [e["trigger"] for e in result["events"]] == ["update"] and result["report"]["completed"] == [{"path": "notes/scribble.md", "added": ["slug"]}]
+
+
+def test_an_implementation_without_a_slug_field_gets_no_slug_on_adoption(b):
+    b.impl("note", "plain", path="plain/{id}.md")
+    run(b)
+    b.write("plain/idea.md", "# Idea\nBody\n")
+    result = run(b)
+    assert result["report"]["adopted"] == ["plain/idea.md"]
+    assert "slug" not in util.ParsedFile(b.read("plain/idea.md")).front

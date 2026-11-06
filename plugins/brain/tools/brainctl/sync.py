@@ -135,7 +135,7 @@ def plan_adoption(vault, type_, impl_name, relpath, parsed):
         additions["type"] = type_
     if "impl" not in front:
         additions["impl"] = impl_name
-    if "slug" not in front:
+    if "slug" not in front and impl and "slug" in impl.fields:      # only implementations that declare a slug field have one
         additions["slug"] = stem
     merged = dict(front)
     merged.update(additions)

@@ -501,3 +501,12 @@ def test_an_instruction_asking_for_several_tags_warns(b):
                          ("Propose tags with distinct keys, up to two tags.", False), ("Propose one tag.", False)):
         rule_impl(b, f"automation:\n  - id: t\n    on: capture\n    do:\n      - {{ action: claude, instruction: \"{text}\" }}\n")
         assert has(run(b), "tags-one-per-key", "warning") is warned, text
+
+
+def test_slug_is_an_ordinary_field_only_implementations_that_declare_it_have_one(b):
+    # no slug field: a {id} path is fine, an item needs no slug, and a {slug} path is rejected
+    b.impl("note", "plain", path="plain/{id}.md")
+    b.write("plain/01M6Q8N7BV24V6C5AF3B8Q4R1H.md", "---\nid: 01M6Q8N7BV24V6C5AF3B8Q4R1H\ntype: note\nimpl: plain\ntitle: Hi\ncreated: 2026-11-06T00:00:00Z\nupdated: 2026-11-06T00:00:00Z\n---\n")
+    assert run(b) == []
+    b.write(".brain/impls/note/bad.md", "---\nimpl: bad\nextends: note\nversion: 1\nstorage:\n  adapter: markdown\n  path: \"bad/{slug}.md\"\n---\n")
+    assert has(run(b), "storage-path", "error", "bad")

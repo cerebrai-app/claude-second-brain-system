@@ -22,18 +22,19 @@ Per the storage contract (doc 03), an item has envelope-level properties and `fi
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `title` | string | yes (not Person) | Non-empty after trimming. Person uses `name` instead. |
-| `slug` | string | maintained by the plugin | Human-readable file name *(Decided)*. See Slug. |
 | `tags` | `Map<String, String>` | no (default `{}`) | Free-form labels with optional string values *(Decided: on all five extensible types; not on `Archive`)*. See Tags. |
 | `body` | markdown string | no (Note: present, may be empty) | Envelope-level. Adapters may not support it (`supports_body`, doc 03). |
 
-**Slug** *(Decided)*. Every item of the five extensible types has a `slug`, the human-readable stem of its file name in the default path templates (`tasks/{slug}.md`). The `id` stays the stable identity; the slug is only a name.
+**Slug** *(Decided)*. `slug` is **not** a core or envelope field. It is an ordinary string field that the five `default-*` implementations declare in their schema (`slug: { type: string }`, doc 09), and it is the human-readable stem of the file name in their path templates (`tasks/{slug}.md`). An alternate implementation need not have one: it names its files by `{id}` or another field, or its backend has no file names. The `id` stays the stable identity; the slug is only a name.
+
+- **Declared, not assumed.** The rules below apply to an implementation that declares a `slug` field in `schema.fields`; the plugin maintains that field. An implementation that does not declare it has no slug: nothing generates, completes or checks one, and its path template cannot use `{slug}` (`validate` rejects it). `slug` is therefore not a reserved key, but its meaning is fixed for any implementation that declares it.
 
 - **Made from** the `title` (Person: the display name) when the item is **created**: lowercased, Unicode letters and digits kept, every other run of characters replaced by one `-`, leading and trailing `-` trimmed, cut to 60 characters (at a `-` where possible). An empty result becomes `untitled`. A title that is already a date (`2026-11-06`) yields itself, which is how journal notes get date file names.
 - **Unique** within the directory its path renders to. A collision takes the next free suffix, a hyphen and a **zero-padded two-digit number**, so the names sort alphabetically: `draft-q4-plan`, `draft-q4-plan-02`, `draft-q4-plan-03`, ..., `draft-q4-plan-10`. (Past 99 the number simply grows to three digits.) Numbers that are part of the title are left as written. (Sorting by stem puts the unsuffixed name first; byte-wise sorting of whole file names puts `a.md` after `a-02.md`, because `-` sorts before `.`.)
 - **Fixed at creation.** It is stored in the item and never changes when the title changes, so a rename does not move the file or break anything. An explicit rename command may change it (the plugin moves the file and keeps refs, which use `id`).
 - **Not user-editable** like `completed`: set by the plugin. Hand-created files get one when they are adopted (doc 05, sync), taken from the file name.
 - The `slug` is plain data, so it travels when an item is archived or converted. On conversion the target's template decides the file name; the slug is kept, with a new suffix if it collides there.
-- Backends that have no file names store it as an ordinary field.
+- It is stored like any other field; a backend with no file names simply stores it as one (or the implementation leaves it out).
 
 **Tags** *(Decided)*. `tags` is a **`Map<String, String>`**: tag name → string value. There is no hierarchy.
 
@@ -254,7 +255,7 @@ A person's relation names are not fixed by the core. Rules for a name:
 
 These names cannot be used as an implementation field, a relation name, or a trait name:
 
-`id`, `type`, `impl`, `slug`, `created`, `updated`, `revision`, `archive`, `archived_at`, `body`, `title`, `name`, `tags`, `status`, `completed`, `outcome`, `defaults`, `system`, `traits`, `contains`, `about`, `links`,
+`id`, `type`, `impl`, `created`, `updated`, `revision`, `archive`, `archived_at`, `body`, `title`, `name`, `tags`, `status`, `completed`, `outcome`, `defaults`, `system`, `traits`, `contains`, `about`, `links`,
 `belongs_to`, `assigned_to`, `blocked_by`, `area`, `owner`, `parent`.
 
 Where a name is a core name for one type (for example `owner` on Project) it is reserved across all types to keep names uniform in cross-type filters and rules.

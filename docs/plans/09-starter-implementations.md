@@ -10,13 +10,16 @@ They are definitions (doc 01 format), not code.
 
 ## What a starter contains *(Decided)*
 
-A starter contains **only the file storage semantics**: the `markdown` adapter binding and the path template, plus the identity keys every definition needs (`impl`, `extends`, `version`).
+A starter contains **only the file storage semantics and the field they depend on**: the `markdown` adapter binding and the path template, the `slug` field that template names (the one field a default implementation declares), plus the identity keys every definition needs (`impl`, `extends`, `version`). Alternate implementations are not required to declare a `slug`.
 
 ```yaml
 ---
 impl: default-task
 extends: task
 version: 1
+schema:
+  fields:
+    slug: { type: string }    # plugin-maintained file-name stem (doc 08)
 storage:
   adapter: markdown
   path: "tasks/{slug}.md"
@@ -37,9 +40,9 @@ Everything else is defined somewhere else:
 
 ## Conventions shared by every starter
 
-- **One file per item, in its own top-level directory, named by a human-readable `slug`** (doc 08), fixed at creation, so renames and status changes never move files (doc 03 moves a file when its rendered path changes).
+- **One file per item, in its own top-level directory, named by a human-readable `slug`** (a field the starter declares, doc 08), fixed at creation, so renames and status changes never move files (doc 03 moves a file when its rendered path changes).
 - **Version:** `version: 1`. Breaking changes ship as core migrations (doc 02) that rewrite the vault's copies.
-- **No schema, status values, sorts, filters, automation, traits or guidance body.**
+- **Schema: only `slug`.** No other fields, status values, sorts, filters, automation, traits or guidance body.
 
 ## Using and changing the starters
 

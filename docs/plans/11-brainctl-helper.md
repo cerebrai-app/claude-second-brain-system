@@ -24,7 +24,7 @@ adopting hand-written files, hashing a script for approval. In the rehearsal, do
 |---|---|
 | `id [-n N]` | New ULID(s). (`ids.py`, shipped now.) |
 | `slug <title> [--dir D]` | A unique slug for the title (doc 08, Slug). (`ids.py`, shipped now.) |
-| `create` | Take an envelope, assign `id`, `slug`, `created`, `updated`, apply schema defaults, validate, write through the binding's adapter, then update the seen state, refs index and id index and append to the log. Returns the stored envelope. |
+| `create` | Take an envelope, assign `id`, `created`, `updated` and, when the implementation declares a `slug` field, `slug` (doc 08), apply schema defaults, validate, write through the binding's adapter, then update the seen state, refs index and id index and append to the log. Returns the stored envelope. |
 | `read <ref>` / `list` | Read an item, or list items by structural query, across bindings and the Archive. `list` keys results by ref **and** binding, so a duplicate ref is visible. |
 | `update` | Full replace with the `revision` read. Sets `updated` and `completed` (doc 08), validates, writes atomically, moves the file when the rendered path changes, refreshes derived state. `conflict` if the revision differs. |
 | `archive <ref>` / `unarchive <ref>` | Doc 03, with ordering and failure handling; refreshes derived state. |

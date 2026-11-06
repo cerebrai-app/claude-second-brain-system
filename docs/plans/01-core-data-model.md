@@ -69,7 +69,7 @@ All five extensible types also have an optional `tags` map (`Map<String, String>
 ```markdown
 ---
 id: 01JABCDEF...          # stable, implementation-independent
-slug: draft-q4-plan       # human-readable file name, fixed at creation
+slug: draft-q4-plan       # field declared by default-* impls (optional elsewhere): file name, fixed at creation
 type: task                # core type
 impl: gtd-task            # implementation
 title: Draft Q4 plan

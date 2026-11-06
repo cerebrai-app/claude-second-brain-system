@@ -37,9 +37,10 @@ def test_mutating_skills_are_not_model_invocable():
 
 
 @pytest.mark.parametrize("path", STARTERS, ids=lambda p: os.path.basename(p))
-def test_starters_hold_only_file_storage_semantics(path):
+def test_starters_hold_only_the_slug_field_and_file_storage_semantics(path):
     d = front(path)
-    assert set(d) <= {"impl", "extends", "version", "storage"}
+    assert set(d) <= {"impl", "extends", "version", "schema", "storage"}
+    assert d["schema"] == {"fields": {"slug": {"type": "string"}}}
     assert d["storage"]["adapter"] == "markdown" and "{slug}" in d["storage"]["path"]
     assert os.path.basename(path) == f"default-{d['extends']}.md"
 

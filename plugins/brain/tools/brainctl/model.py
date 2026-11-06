@@ -22,11 +22,11 @@ CORE_RELATIONS = {
 ALL_CORE_RELATIONS = {name for rels in CORE_RELATIONS.values() for name in rels}
 
 RESERVED = {
-    "id", "type", "impl", "slug", "created", "updated", "revision", "archive", "archived_at", "body", "title", "name", "tags",
+    "id", "type", "impl", "created", "updated", "revision", "archive", "archived_at", "body", "title", "name", "tags",
     "status", "completed", "outcome", "defaults", "system", "traits", "contains", "about", "links", "belongs_to", "assigned_to",
     "blocked_by", "area", "owner", "parent",
 }
-ENVELOPE_KEYS = {"id", "type", "impl", "slug", "created", "updated", "archive", "archived_at"}
+ENVELOPE_KEYS = {"id", "type", "impl", "created", "updated", "archive", "archived_at"}
 FIELD_TYPES = ("string", "text", "integer", "number", "boolean", "date", "datetime", "enum", "list")
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 REF_RE = re.compile(r"^(note|task|project|area|person|archive):([^\s:]+)$")
