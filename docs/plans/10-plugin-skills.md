@@ -118,7 +118,7 @@ Wiped the scratch vault and reran steps 1 to 10 headless on brainctl 0.2.0 (then
 1. **Fixed: `created` taken from a deleted file's history.** Adopting an untracked file at a path that once held another (committed, since deleted) file used that old file's first commit time. Adoption now uses git history only for a tracked file (0.2.1).
 2. **Fixed: sync events have no `id`.** Events now carry a stable `id` (a hash of the transition), documented in the automation reference (0.2.2).
 3. **Fixed: `approve` recorded `by` from git `user.email`** (`noreply@anthropic.com` in a headless session). `--by` is now required.
-4. **Still hand-written:** every item write is the model editing files, because `brainctl create`/`update`/`convert` do not exist. The templates and timestamps are now deterministic, the writes are not.
+4. **Fixed: every item write was the model editing files.** `brainctl` 0.3.0 has `create`, `update`, `archive`, `unarchive`, `delete`, `convert`, `op`, `pending` and `log` for markdown bindings, and the skills call them. The next rehearsal should confirm the model uses them. Still hand-written by design: the Inbox at setup, and sync adoption of the user's own files. Script-adapter bindings answer `unsupported` for writes.
 5. **Fixed: run outcomes in the log were free text.** The vocabulary is fixed (doc 05, Logging) and `validate` checks it.
 
 ## Next steps
