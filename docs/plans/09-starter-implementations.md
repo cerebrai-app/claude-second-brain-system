@@ -42,7 +42,7 @@ Everything else is defined somewhere else:
 
 - **One file per item, in its own top-level directory, named by a human-readable `slug`** (a field the starter declares, doc 08), fixed at creation, so renames and status changes never move files (doc 03 moves a file when its rendered path changes).
 - **Version:** `version: 1`. Breaking changes ship as core migrations (doc 02) that rewrite the vault's copies.
-- **Schema: only `slug`.** No other fields, status values, sorts, filters, automation, traits or guidance body.
+- **Schema: only `slug`.** No other fields, status values, sorts, filters or automation, and no traits. **Guidance body: only the Slug section**, which says how the implementation derives its slug (made from, uniqueness, fixed at creation, adoption, archive and conversion). The rules live in each starter file, not in the core instructions, so an alternate implementation that declares a `slug` field states its own.
 
 ## Using and changing the starters
 

@@ -25,7 +25,7 @@ Detail lives in the reference files next to this skill. Read the one you need be
 7. **Show diffs, then apply.** For anything beyond a trivial edit, show the user what will change. Changes proposed by Claude actions need per-proposal approval (see the automation reference).
 8. **Keep derived state out of git.** `.brain/index/`, `.brain/cache/`, `.brain/automation/seen|pending|log.jsonl`, `.brain/conversions/`, `.brain/python/.venv/` are ignored; never commit them.
 9. **Do not commit unless the user asks** (setup and triage offer a commit at the end).
-10. **Ids and slugs come from the helper, never from you.** (Only implementations that declare a `slug` field have a slug; the default ones do.) New ULID: `python3 -I .brain/python/brainctl/ids.py ulid`. New slug (unique in the target directory): `python3 -I .brain/python/brainctl/ids.py slug "<title>" --dir <directory>`. Never invent an id. Quote a title or slug in YAML when the plain form would load as another type (`2026-11-06`, `yes`, `010`).
+10. **Ids and slugs come from the helper, never from you.** New ULID: `python3 -I .brain/python/brainctl/ids.py ulid`. Never invent an id. If the item's implementation declares a `slug` field, read the Slug section of its definition (`.brain/impls/<type>/<impl>.md`) for how to derive it; the defaults all have one. Quote a title in YAML when the plain form would load as another type (`2026-11-06`, `yes`, `010`).
 11. **Keep derived state in step after every write** until `brainctl` has `create`/`update`: refresh `updated` (and `completed` when a task or project's status category changes), then run `brainctl sync --refresh` so the sync seen state accepts your own write. Forgetting it makes the next sync report your edit as an outside change.
 12. **Check your work with `brainctl validate`** after changes that touch several items, and before offering a commit.
 
@@ -39,7 +39,7 @@ Detail lives in the reference files next to this skill. Read the one you need be
 | `sync [--no-adopt] [--dry-run]` | Detect outside changes, adopt hand-written files, update the seen state; returns `events` and a `report`. |
 | `sync --refresh` | Accept the current state as seen (no events, no adoption), after your own writes. |
 | `list`, `read <ref>` | Items across bindings and the Archive. |
-| `id [-n N]`, `slug <title> [--dir D]` | New ULIDs and unique slugs. |
+| `id [-n N]`, `slug <title> [--dir D]` | New ULIDs and unique slugs (the latter as the implementation's Slug section directs). |
 | `approve-hash <script>` | The workspace approval hash. |
 
 Not available yet: `create`, `update`, `archive`, `unarchive`, `delete`, `convert`. Until they exist, write item files by hand following these rules, then `sync --refresh` and `validate`. Script-adapter bindings are not read yet; `sync` and `validate` report them as incomplete/skipped.
