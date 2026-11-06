@@ -1,6 +1,6 @@
 ---
 name: python
-description: Use and manage the vault's Python workspace (.brain/python/) for deterministic, reusable code: scripts for repetitive tasks, hooks, and adapters for remote backends. Use when the user runs /brain:python, or when you would otherwise repeat the same deterministic work (a report, a bulk edit, a sync with an external service).
+description: Use and manage the vault's Python workspace (.brain/python/) for deterministic, reusable code, such as scripts for repetitive tasks, hooks, and adapters for remote backends. Use when the user runs /brain:python, or when you would otherwise repeat the same deterministic work (a report, a bulk edit, a sync with an external service).
 argument-hint: "init | sync | list | run <name> [json] | approve <name>|--all"
 ---
 
