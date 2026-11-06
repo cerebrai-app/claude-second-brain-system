@@ -10,34 +10,36 @@ They are definitions (doc 01 format), not code.
 
 ## What a starter contains *(Decided)*
 
-A starter holds only what is specific to **this implementation and its backend**:
+A starter contains **only the file storage semantics**: the `markdown` adapter binding and the path template, plus the identity keys every definition needs (`impl`, `extends`, `version`).
 
-1. the **`storage` binding** (adapter and path template);
-2. **schema fields the implementation adds** beyond the core (doc 08), and any **custom `status_values`**;
-3. **sorts and filters that depend on those added fields or values**;
-4. a **short body** only for guidance about those added fields.
+```yaml
+---
+impl: default-task
+extends: task
+version: 1
+storage:
+  adapter: markdown
+  path: "tasks/{id}.md"
+---
+```
 
-It does **not** contain system rules. These belong to the plugin's system skills and instructions:
-- the meaning of core fields, relations and statuses (the base `name` parts and rules for Person, what makes a task blocked, placement, the Inbox, how defaults resolve);
-- automation rules (no `automation:` block ships in any starter);
-- generic views that use only core fields (for example "most recently updated first" or "untagged");
-- guidance on how to work with a core type.
+Everything else is defined somewhere else:
+- **At the top level (core and system):** the core fields, relations, statuses and their rules (doc 08), the semantics of the Inbox, placement and defaults (docs 01 and 06), automation, and guidance on how to work with each core type. These belong to the plugin's system skills and instructions, not to a vault's definitions.
+- **By the user:** added schema fields, custom status values, sorts, filters, automation and traits are added to the vault's copy of the implementation when the user wants them (docs 01, 04, 05). A fresh vault has none.
 
-| Starter | Type | Storage path | Fields beyond the core | Sorts and filters |
-|---|---|---|---|---|
-| `default-task` | `task` | `tasks/{id}.md` | `due` (date), `priority` (`low`/`med`/`high`) | Sort `due-then-priority` (pinned keys); filters `actionable-today`, `overdue` |
-| `default-note` | `note` | `notes/{id}.md` | none | none |
-| `default-project` | `project` | `projects/{id}.md` | `target` (date); custom status `on_hold` (counts as `open`) | Sort `target-date`; filter `active` |
-| `default-area` | `area` | `areas/{id}.md` | none | none. The Inbox is stored here as `areas/inbox.md`. |
-| `default-person` | `person` | `people/{id}.md` | `email`, `phone` | none. The base `name` structure and Person rules are core (doc 08), not repeated here. |
+| Starter | Type | Storage path |
+|---|---|---|
+| `default-task` | `task` | `tasks/{id}.md` |
+| `default-note` | `note` | `notes/{id}.md` |
+| `default-project` | `project` | `projects/{id}.md` |
+| `default-area` | `area` | `areas/{id}.md` (the Inbox is stored here as `areas/inbox.md`) |
+| `default-person` | `person` | `people/{id}.md` (the vault's single active person implementation, doc 01) |
 
 ## Conventions shared by every starter
 
-- **Storage:** the built-in `markdown` adapter, one file per item, in its own top-level directory, named by `id` so renames and status changes never move files (doc 03 moves a file when its rendered path changes).
+- **One file per item, in its own top-level directory, named by `id`**, so renames and status changes never move files (doc 03 moves a file when its rendered path changes).
 - **Version:** `version: 1`. Breaking changes ship as core migrations (doc 02) that rewrite the vault's copies.
-- **Sorts** referenced by automation have **pinned `keys`** (doc 04) so unattended runs never depend on a model-proposed schema.
-- **Filters** are plain English with a structural `scope` where one applies (doc 04). Pinned interpretations are omitted until the predicate grammar is decided (doc 04, open question).
-- **No traits ship.** Traits are the user's to define (doc 01).
+- **No schema, status values, sorts, filters, automation, traits or guidance body.**
 
 ## Using and changing the starters
 
@@ -47,14 +49,13 @@ It does **not** contain system rules. These belong to the plugin's system skills
 
 ## Gaps found while writing the starters
 
-1. **Field type vocabulary is not specified anywhere.** The starters use `string`, `date` and `enum` (with `values` and `default`), and sorts use `datetime`. The full set (and `number`, `bool`, `list`, validation constraints) needs a section, probably in doc 08.
-2. **Sort `keys` for envelope properties.** Doc 04 should say keys may name envelope properties (`created`, `updated`) and Person `name` parts.
-3. **Pinned filter interpretations** are omitted pending the predicate grammar (doc 04).
-4. **System-provided views and rules have no home yet.** With generic sorts, filters and automation removed from the starters (for example "recent first" or a daily "today" view), the plugin's system skills must provide them. Where they are defined, and how they are named so users and rules can reference them (doc 05 `surface`, doc 04), is not specified.
+1. **Field type vocabulary is not specified anywhere.** Starters no longer need it, but any user-added schema field does (`string`, `date`, `datetime`, `enum` with `values` and `default`, and `number`, `bool`, `list`, validation constraints). It needs a section, probably in doc 08.
+2. **System-provided views and rules have no home yet.** With no sorts, filters or automation in the starters, anything a vault should have out of the box (a generic "recently updated" view, a "today" view) must come from the plugin's system skills. Where they are defined and how they are named so users and rules can reference them (doc 05 `surface`, doc 04) is not specified.
+3. **System skills and instructions** that carry the core semantics are not written yet (what a blocked task is, how the Inbox and triage behave, how to work with each core type).
 
 ## Next steps
 
-1. Specify the field type vocabulary (gap 1) and the key-name rules (gap 2).
-2. Add the starters to the plugin's install flow implementation, copying them in step 2 of setup.
-3. Specify system-provided views and rules (gap 4) in docs 04 and 05, and the system skills and instructions that carry the core semantics removed from the starters.
-4. Decide whether a few more starters are worth shipping (a GTD-style task variant, a journal note variant for the daily-journal example in doc 05).
+1. Specify the field type vocabulary (gap 1).
+2. Specify system-provided views and rules (gap 2) in docs 04 and 05.
+3. Write the system skills and instructions that carry the core semantics (gap 3).
+4. Add the starters to the plugin's install flow implementation, copying them in step 2 of setup.
