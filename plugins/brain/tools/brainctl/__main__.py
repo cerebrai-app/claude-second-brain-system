@@ -1,8 +1,9 @@
 """Command line: python -m brainctl [--vault PATH] <command> ...   (run from .brain/python; the vault is found by walking up)."""
 import argparse
+import json
 import sys
 
-from . import __version__, approval, ids, sync as sync_mod, util, validate as validate_mod
+from . import __version__, approval, client as client_mod, ids, sync as sync_mod, util, validate as validate_mod
 from .model import Vault
 
 EXIT_OK, EXIT_FINDINGS, EXIT_USAGE = 0, 1, 2
@@ -64,7 +65,7 @@ def cmd_list(args):
     vault = _vault(args)
     scan = vault.scan()
     rows = [{"ref": i.ref, "impl": i.impl, "path": i.relpath, "archived": i.archived, "title": i.title, "revision": i.revision} for i in scan.items]
-    print(util.dumps({"ok": True, "items": rows}))
+    print(util.dumps({"ok": True, "items": rows, "incomplete": [{"binding": f"{t}/{n}", "reason": r} for t, n, r in scan.skipped]}))
     return EXIT_OK
 
 
@@ -79,10 +80,37 @@ def cmd_read(args):
     return EXIT_OK
 
 
+def cmd_adapter(args):
+    """Call one operation of an implementation's script adapter: the same path sync and list use."""
+    vault = _vault(args)
+    impl = next((i for (t, n), i in vault.impls.items() if n == args.impl and not i.error), None)
+    if impl is None or impl.adapter != "script":
+        print(util.dumps({"ok": False, "error": {"code": "invalid", "message": f"{args.impl!r} is not a script implementation"}}))
+        return EXIT_USAGE
+    try:
+        call_args = json.loads(args.args) if args.args else {}
+        if not isinstance(call_args, dict):
+            raise ValueError("--args must be a JSON object")
+        result = client_mod.ScriptClient.for_impl(vault, impl).call(args.op, **call_args)
+    except ValueError as exc:
+        print(util.dumps({"ok": False, "error": {"code": "invalid", "message": str(exc)}}))
+        return EXIT_USAGE
+    except client_mod.ClientError as err:
+        print(util.dumps({"ok": False, "error": {"code": err.code, "message": err.message, "retryable": err.retryable}}))
+        return EXIT_FINDINGS
+    print(util.dumps({"ok": True, "result": result}))
+    return EXIT_OK
+
+
 def cmd_approve_hash(args):
     vault = _vault(args)
     print(approval.approval_hash(vault.path(".brain/python"), args.script))
     return EXIT_OK
+
+
+def adapter_ops():
+    from .adapter import OPERATIONS
+    return OPERATIONS
 
 
 def build_parser():
@@ -114,6 +142,11 @@ def build_parser():
     s = sub.add_parser("read", help="read an item by ref")
     s.add_argument("ref")
     s.set_defaults(fn=cmd_read)
+    s = sub.add_parser("adapter", help="call one operation of a script implementation's adapter (needs the script approved)")
+    s.add_argument("impl")
+    s.add_argument("op", choices=adapter_ops())
+    s.add_argument("--args", help="JSON object of arguments")
+    s.set_defaults(fn=cmd_adapter)
     s = sub.add_parser("approve-hash", help="the workspace approval hash of a script (path relative to .brain/python)")
     s.add_argument("script")
     s.set_defaults(fn=cmd_approve_hash)

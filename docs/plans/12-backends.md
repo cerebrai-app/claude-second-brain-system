@@ -40,13 +40,27 @@ Rules that hold throughout: no secrets in the repo, spec, registry, tests or cha
 
 A fresh adapter on an empty sandbox is driven through the same JSON path as the real process. About twenty checks cover the contract (see the protocol reference in the skill for the list). The kit is the definition of "this adapter honors doc 03"; a backend is not bound until it passes. Each check was written with a deliberately broken adapter that it must catch (stale revisions ignored, tags dropped, pages that drop items, missing `not_found`, delete without confirmation, crashes, bad `describe`), and `tests/test_adapter.py` keeps that proof.
 
+## Client
+
+`brainctl/client.py` runs a registered script once per operation, as the contract in docs 03 and 07 describes:
+
+- The script must be in `registry.yml` and approved for its current hash; otherwise the call fails with `unauthorized` and nothing runs.
+- A scrubbed environment: a minimal base plus only the script's `requires_env`. `PYTHONPATH` is the workspace, so `brainctl.adapter` and `lib/` import. The interpreter is the one running `brainctl` (override with `BRAINCTL_PYTHON`, for example the workspace venv's).
+- A timeout per call (`storage.timeout_seconds`, else the registry `timeout`, else 30 seconds); a timeout is `unavailable`.
+- `rate_limited` is retried once after a minute; a second one in a row fails.
+- `list` is followed through every cursor.
+
+`brainctl list`, `read`, `sync` and `validate` read script bindings through it. A binding that cannot be read (unregistered, unapproved, failing, timed out) is reported as **incomplete**, never as empty: `sync` does not report its items as missing and leaves its seen state alone. `brainctl adapter <impl> <op> --args '<json>'` makes one call, for testing and for skills.
+
+`validate` also asks each approved adapter to `describe` itself and compares it with the binding: `adapter-describe` (fails), `adapter-env-missing` (warning), `adapter-protocol`, `adapter-tags` (labels without `tag_values_field`), `adapter-traits` (person on an adapter without trait support), `adapter-body` and `adapter-fields` (warnings).
+
 ## Validation additions
 
 `brainctl validate` now checks script implementations: `command` is present and, for `python:<name>`, registered in the workspace registry (`command-unregistered`, an error); `timeout_seconds` is a positive integer; and a backend spec exists at `.brain/backends/<impl>.md` (`backend-spec-missing`, a warning).
 
 ## Current limitations
 
-- **`brainctl` does not call script adapters yet.** `sync` and `validate` report script bindings as incomplete or skipped, so items stored in a backend are not yet visible to sync, validate, triage or rules. A backend can be built, tested and bound, but the vault cannot use it end to end until the client side exists (next step 1).
+- **Reads only.** `brainctl` calls script adapters for `list`, `read`, `sync` and `validate` (see Client below) and, for testing, any operation through `brainctl adapter`. Its write commands (`create`, `update`, `archive`, ...) do not exist yet, so the plugin's own writes to a backend are still done by skills calling `brainctl adapter <impl> <op>`; id-index maintenance for `native_ids` backends is part of those write commands and is not built.
 - Real-service verification is manual and by direct invocation (the skill describes it).
 - The Archive adapter must be markdown for now; a script adapter as the Archive adapter is unsupported until the client side and the `archive_adapter` requirements are exercised.
 
@@ -59,6 +73,6 @@ A fresh adapter on an empty sandbox is driven through the same JSON path as the 
 
 ## Next steps
 
-1. Build the client side in `brainctl`: spawn a registered script per operation with the timeout, the one-minute `rate_limited` retry, id-index maintenance, and expose script bindings to `list`, `read`, `sync` and `validate`.
+1. Write commands in `brainctl` (`create`, `update`, `archive`, `unarchive`, `delete`, `convert`), including id-index maintenance for `native_ids` backends.
 2. Try the skill end to end on a real service in a sandbox (we have none yet) and fold the findings into the skill and templates.
 3. Decide open question 2 once two real backends exist.

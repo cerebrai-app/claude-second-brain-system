@@ -38,6 +38,7 @@ def validate(vault, ref=None):
     _check_traits(vault, findings)
     scan = vault.scan()
     _check_scan_problems(vault, scan, findings)
+    _check_script_bindings(vault, findings)
     _check_inbox(vault, scan, findings)
     _check_items(vault, scan, findings)
     _check_automation(vault, findings)
@@ -47,6 +48,40 @@ def validate(vault, ref=None):
     if ref:
         findings = Findings(f for f in findings if f["subject"] == ref or f["subject"].startswith(ref))
     return findings
+
+
+def _check_script_bindings(vault, f):
+    """Ask each approved script adapter to describe itself and compare it with the binding (docs/plans/03, `describe`)."""
+    from . import client as client_mod
+    for (type_, name), impl in sorted(vault.impls.items()):
+        if impl.error or impl.adapter != "script":
+            continue
+        subject = f"{type_}/{name}"
+        try:
+            c = client_mod.ScriptClient.for_impl(vault, impl)
+            c.check_approved()
+        except client_mod.ClientError:
+            continue                    # unregistered and unapproved scripts are reported elsewhere
+        missing = [v for v in (c.entry.get("requires_env") or []) if v not in os.environ]
+        if missing:
+            f.warn("adapter-env-missing", subject, f"environment variable(s) not set: {', '.join(missing)}")
+        try:
+            described = c.describe() or {}
+        except client_mod.ClientError as err:
+            f.error("adapter-describe", subject, f"describe failed: {err.message}")
+            continue
+        caps = described.get("capabilities") or {}
+        if described.get("protocol") not in (None, 1):
+            f.error("adapter-protocol", subject, f"adapter speaks protocol {described.get('protocol')!r}; this helper speaks 1")
+        if caps.get("tags") == "labels" and not impl.storage.get("tag_values_field"):
+            f.error("adapter-tags", subject, "the adapter stores tags as labels (names only); the binding needs storage.tag_values_field for the values")
+        if type_ == "person" and caps.get("supports_traits") is False:
+            f.error("adapter-traits", subject, "the adapter does not support traits, which person items can carry")
+        if caps.get("supports_body") is False:
+            f.warn("adapter-body", subject, "the adapter does not store item bodies; bodies will be lost on this binding")
+        extra = [k for k in impl.fields if k not in ("title",)]
+        if extra and caps.get("preserves_unknown_fields") is False:
+            f.warn("adapter-fields", subject, "the adapter may drop fields it does not know; the implementation defines extra fields")
 
 
 # ---- vault files ------------------------------------------------------------------------------------------------------

@@ -249,13 +249,38 @@ class Vault:
             return archive.get("path") or "archive/{type}/{impl}/{slug}.md"
         return None
 
+    def _scan_script(self, scan, type_, name, impl, remote):
+        if not remote:
+            scan.skipped.append((type_, name, "script adapters are not read in this mode"))
+            return
+        from . import client as client_mod
+        try:
+            c = client_mod.ScriptClient.for_impl(self, impl)
+            envelopes = c.list_all({"types": [type_], "impls": [name], "include_archived": True})
+        except client_mod.ClientError as err:
+            scan.skipped.append((type_, name, f"script adapter unavailable: {err.message}"))
+            return
+        for env in envelopes:
+            try:
+                front = client_mod.envelope_to_front(env)
+            except (KeyError, AttributeError, IndexError):
+                scan.problems.append(("bad-envelope", f"script:{name}", f"adapter returned a malformed envelope: {str(env)[:80]}"))
+                continue
+            archived = bool(front.get("archive"))
+            binding = ("archive", "archive") if archived else (type_, name)
+            scan.items.append(Item(f"script:{name}/{front['id']}", front, env.get("body") or "", env.get("revision"), binding, archived=archived))
+
     # ---- scanning (markdown adapter) --------------------------------------------------------------------------------
-    def scan(self):
+    def scan(self, remote=True):
+        """Read every binding. With remote=False script bindings are skipped (no processes are started)."""
         scan = Scan()
         matched = {}  # relpath -> [(type, impl)] bindings whose directory pattern matches the file
         patterns = []
         for (type_, name), impl in sorted(self.impls.items()):
             if impl.error or type_ not in CORE_TYPES:
+                continue
+            if impl.adapter == "script":
+                self._scan_script(scan, type_, name, impl, remote)
                 continue
             if impl.adapter != "markdown" or not impl.path_template:
                 scan.skipped.append((type_, name, f"adapter {impl.adapter!r} is not supported by this helper yet"))

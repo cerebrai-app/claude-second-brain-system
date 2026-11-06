@@ -31,7 +31,7 @@ adopting hand-written files, hashing a script for approval. In the rehearsal, do
 | `convert plan <ref> --to <impl>` | The deterministic mapping and report (carried, unmapped, invalid, missing, filled by default), as JSON. |
 | `convert apply <ref> --to <impl>` | With the user's resolutions on stdin: validate, create in the target with the same id, record the native id, delete the source, refresh derived state, and write or clear the half-converted marker. |
 | `validate [--ref R]` | Every mechanical check in the `validate` skill: manifest and config, definitions, items, relations, duplicates across bindings, unadopted files, leftover markers, ignored-path checks, workspace approvals. JSON findings with severity. |
-| `sync` | Detect: scan all bindings and the Archive, match by ref across bindings, diff against the seen state, **adopt** hand-written files (doc 05), and return the sync report and ordered event list. Updates the seen state, except for externally changed items that fail validation (held back so they are reported again). `--no-adopt` reports without editing files; `--dry-run` writes nothing; `--refresh` accepts the current state as seen (no events, no adoption), for use after the plugin's own writes. Script-adapter bindings are not read yet and are reported as incomplete; the one-minute `rate_limited` retry applies only to them and arrives with them. |
+| `sync` | Detect: scan all bindings and the Archive, match by ref across bindings, diff against the seen state, **adopt** hand-written files (doc 05), and return the sync report and ordered event list. Updates the seen state, except for externally changed items that fail validation (held back so they are reported again). `--no-adopt` reports without editing files; `--dry-run` writes nothing; `--refresh` accepts the current state as seen (no events, no adoption), for use after the plugin's own writes. Script-adapter bindings are read through `client.py` (doc 12, Client); one that cannot be read is reported as incomplete and its items are never reported as missing. The one-minute `rate_limited` retry applies to script calls. |
 | `approve-hash <script>` | The workspace approval hash (below). |
 | `index rebuild` | Rebuild the derived refs index by scanning frontmatter ids. |
 
@@ -97,7 +97,7 @@ capture:
 
 ## Package layout and tests
 
-The helper is the package `plugins/brain/tools/brainctl/` (`__main__.py` CLI, `model.py` vault and scanning, `schema.py` field types, `validate.py`, `sync.py`, `approval.py`, `ids.py`, `util.py`, and for backend authors `adapter.py` and `conformance.py`, doc 12). Setup copies the package without tests or caches. Its tests are pytest tests in `tests/` (see `TESTING.md`): unit tests for ids, schema, scanning and the approval hash; one test per `validate` check; sync tests for baseline, events, adoption, conversions and refresh; CLI tests including the installed-copy layout.
+The helper is the package `plugins/brain/tools/brainctl/` (`__main__.py` CLI, `model.py` vault and scanning, `schema.py` field types, `validate.py`, `sync.py`, `approval.py`, `ids.py`, `util.py`, `client.py` (runs script adapters), and for backend authors `adapter.py` and `conformance.py`, doc 12). Setup copies the package without tests or caches. Its tests are pytest tests in `tests/` (see `TESTING.md`): unit tests for ids, schema, scanning and the approval hash; one test per `validate` check; sync tests for baseline, events, adoption, conversions and refresh; CLI tests including the installed-copy layout.
 
 ## Implementation order
 
@@ -105,7 +105,7 @@ Built incrementally, each step usable alone:
 
 1. ~~`id`, `slug`~~ — done (`ids.py`).
 2. ~~Parsing, schema loading and `validate`~~ — done: front matter, definitions, traits, items, relations, tags, rules, git-ignore, workspace approvals (`validate.py`, `schema.py`, `model.py`).
-3. ~~`read`, `list`, `sync` (detect, then adopt)~~ — done for the markdown adapter and the Archive directory (`sync.py`). Not yet: script adapters, the rate-limit retry.
+3. ~~`read`, `list`, `sync` (detect, then adopt)~~ — done for the markdown adapter and the Archive directory (`sync.py`). Script adapters are read through `client.py` (with the rate-limit retry and the `brainctl adapter` command). Not yet: write commands and id-index maintenance.
 4. `create`, `update`, `archive`, `unarchive`, `delete`.
 5. `convert plan` / `convert apply`.
 6. `approve-hash`, `index rebuild`, packaging, and the migration that updates the copy.

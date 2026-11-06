@@ -245,7 +245,7 @@ def test_an_invalid_external_change_runs_no_rules_and_is_reported_until_fixed(b)
 def test_script_bindings_are_reported_incomplete(b):
     b.write(".brain/impls/task/remote.md", "---\nimpl: remote\nextends: task\nversion: 1\nstorage:\n  adapter: script\n  command: python:remote\n---\n")
     result = run(b)
-    assert result["report"]["incomplete"] == [{"binding": "task/remote", "reason": "adapter 'script' is not supported by this helper yet"}]
+    assert result["report"]["incomplete"] == [{"binding": "task/remote", "reason": "script adapter unavailable: python:remote is not in the Python workspace registry"}]
 
 
 # ---- refresh ----------------------------------------------------------------------------------------------------------

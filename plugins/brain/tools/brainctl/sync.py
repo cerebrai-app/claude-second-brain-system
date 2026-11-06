@@ -250,6 +250,7 @@ def sync(vault, adopt=True, dry_run=False, refresh=False):
         scan = vault.scan()
 
     old, any_state = _read_seen(vault)
+    unreadable = {(t, n) for t, n, _ in scan.skipped}      # a binding that failed to read must not make its items look deleted
     report["baseline"] = not any_state
     refs = scan.by_ref()
     current = {}
@@ -293,7 +294,7 @@ def sync(vault, adopt=True, dry_run=False, refresh=False):
                     if before != after:
                         events.append(dict(base, trigger="relation", relation=name, added=sorted(after - before), removed=sorted(before - after)))
         for ref, was in old.items():
-            if ref not in current:
+            if ref not in current and (ref.split(":", 1)[0], was["impl"]) not in unreadable:
                 report["missing"].append(ref)
     else:
         for ref, item in current.items():
@@ -308,9 +309,14 @@ def sync(vault, adopt=True, dry_run=False, refresh=False):
             if ref in old:
                 write[ref] = (old[ref]["impl"], old[ref]["archived"], old[ref]["snapshot"])
         # items that vanished stay out of the new state; they are in the report
-        bindings = sorted({(t, n) for (t, n) in vault.impls if vault.impls[(t, n)].adapter == "markdown" and not vault.impls[(t, n)].error})
-        _write_seen(vault, write, bindings)
+        # a binding that could not be read is not rewritten, so its previous state stays
+        _write_seen(vault, write, _readable_bindings(vault, scan))
     return {"events": events, "report": report}
+
+
+def _readable_bindings(vault, scan):
+    skipped = {(t, n) for t, n, _ in scan.skipped}
+    return sorted((t, n) for (t, n), i in vault.impls.items() if i.adapter in ("markdown", "script") and not i.error and (t, n) not in skipped)
 
 
 def _refresh(vault):
@@ -320,8 +326,7 @@ def _refresh(vault):
         if item.ref in snapshots and item.archived:
             continue
         snapshots[item.ref] = (item.impl if not item.archived else "archive", item.archived, snapshot(vault, item))
-    bindings = sorted({(t, n) for (t, n) in vault.impls if vault.impls[(t, n)].adapter == "markdown" and not vault.impls[(t, n)].error})
-    _write_seen(vault, snapshots, bindings)
+    _write_seen(vault, snapshots, _readable_bindings(vault, scan))
     report = {"baseline": False, "adopted": [], "unadopted": [u[2] for u in scan.unadopted], "invalid": [], "missing": [], "incomplete": [], "problems": [],
               "refreshed": len(snapshots)}
     return {"events": [], "report": report}
