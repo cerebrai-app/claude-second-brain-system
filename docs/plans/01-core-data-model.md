@@ -198,10 +198,10 @@ provided the target adapter supports traits.
 
 **Versioning.** Traits are versioned and migrated like implementations (doc 02): `version` in the definition, a manifest entry, and a migration note for breaking changes.
 
-**Open questions**
-1. Can an implementation restrict which traits may be attached to its items (an allow-list)?
-2. Does a trait declare the relations it expects (for example `colleague` expecting a `works_with` relation), or stay fields-only?
-3. Do traits get their own `defaults` (for example a default set of traits for new items)?
+**Decided**
+1. ~~Allow-list~~ — **no allow-list.** Any defined trait whose `applies_to` includes the item's type can be attached. The vault controls availability by which traits it defines.
+2. ~~Trait relations~~ — **fields only.** A trait does not declare expected relations; a person's relations stay free-form named relations to any item.
+3. ~~Trait defaults~~ — **no defaults.** A new item starts with no traits. Traits are attached explicitly (for example `--trait colleague` on capture, or an approved Claude proposal).
 
 ## Default implementation resolution
 

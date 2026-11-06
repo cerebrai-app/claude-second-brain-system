@@ -91,6 +91,7 @@ it is absent (doc 03). The sync seen state (doc 05) can narrow the scan for larg
 
 - The type defaults to `note`; `--type task` (and so on) overrides it. The implementation is the Inbox `defaults.<type>` (doc 01 resolution, step 3).
 - The item is created with no placement relation, so it is in the Inbox. This fires `create` and `capture` (doc 05).
+- `--trait <name>` (repeatable) attaches traits at creation, for types where traits are enabled (Person in the MVP); the trait's required fields are prompted for. A new item otherwise starts with no traits (doc 01).
 - **`--type person` is the exception:** a person is top-level, so it is created with the vault's active person implementation, is not in the Inbox, fires `create` only (no `capture`), and is never offered for triage.
 - Items created outside the plugin that land in the Inbox are detected by sync and fire `capture` as well (`origin: external/...`), but **do not** trigger the inline
   offer below; they simply appear in the triage backlog.
@@ -132,6 +133,8 @@ A `conflict` means re-read and re-propose.
 
 Conversion moves an item to another implementation of the **same core type**, keeping its `id` and therefore every existing reference (doc 03). Converting to a different core type
 is not triage and is out of scope.
+
+Trait lists and namespaced trait fields travel with the item and carry over unchanged when the target adapter supports traits (doc 01, 03); a target that does not is blocked.
 
 Conversion is a plugin operation, not tied to triage: the same mapping, report, apply order and failure handling serve any item, including a **person** moving to a migration-target
 implementation (doc 01). Persons are never triaged, but they can be converted individually. A bulk command that converts many items (all persons, or all items of an implementation)
