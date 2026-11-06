@@ -31,7 +31,7 @@ Detail lives in the reference files next to this skill. Read the one you need be
 
 ## Running `brainctl`
 
-`brainctl` is the deterministic helper copied into the vault at `.brain/python/brainctl/` (spec: `docs/plans/11-brainctl-helper.md`). Run it from `.brain/python` through the workspace tool recorded in `python.tool` in `.brain/config.yml`, using the locked environment without re-resolving: for `uv`, `uv run --frozen python -m brainctl <command>`; for `poetry`, `poetry run python -m brainctl <command>`; for `pdm`, `pdm run python -m brainctl <command>`. It finds the vault by walking up. Output is JSON on stdout (add `--text` for people); exit code 0 is success, 1 means findings or not found, 2 is a usage error.
+`brainctl` is the deterministic helper copied into the vault at `.brain/python/brainctl/` (spec: `docs/plans/11-brainctl-helper.md`). Run it from `.brain/python` through the workspace tool recorded in `python.tool` in `.brain/config.yml`, in the workspace virtualenv (`.brain/python/.venv`) only, using the locked environment without re-resolving: for `uv`, `uv run --frozen python -m brainctl <command>`; for `poetry`, `poetry run python -m brainctl <command>`; for `pdm`, `pdm run python -m brainctl <command>`. It finds the vault by walking up. Output is JSON on stdout (add `--text` for people); exit code 0 is success, 1 means findings or not found, 2 is a usage error.
 
 | Command | Use |
 |---|---|

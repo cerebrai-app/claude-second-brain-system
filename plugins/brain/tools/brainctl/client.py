@@ -4,13 +4,12 @@
     client.call("read", ref="task:01J...")            # -> the result, or raises ClientError(code, message)
     client.list_all(query)                            # follows cursors; every envelope
 
-Rules: the script must be in registry.yml and approved for its current hash; it runs with a scrubbed environment holding only
+Rules: the script must be in registry.yml and approved for its current hash; it runs in the workspace virtualenv (`.brain/python/.venv`, never another interpreter) with a scrubbed environment holding only
 its `requires_env`; each call has a timeout; a `rate_limited` error is retried once after a minute, and a second one fails.
 """
 import json
 import os
 import subprocess
-import sys
 import time
 
 from . import adapter as adapter_mod, approval, util
@@ -29,6 +28,15 @@ class ClientError(Exception):
         self.retryable = retryable
 
 
+def venv_python(vault):
+    """The workspace's own interpreter. Scripts never run under any other Python (no system or calling interpreter)."""
+    python = vault.path(".brain/python/.venv/bin/python")
+    if not os.path.isfile(python):
+        raise ClientError("unavailable", "the Python workspace has no environment at .brain/python/.venv; sync it with the workspace tool "
+                          "(for example `uv sync --frozen`, or `poetry install` with in-project virtualenvs) and try again")
+    return python
+
+
 def registry(vault):
     data = util.load_yaml_file(vault.path(".brain/python/registry.yml")) if os.path.isfile(vault.path(".brain/python/registry.yml")) else None
     return {s.get("name"): s for s in ((data or {}).get("scripts") or []) if isinstance(s, dict)}
@@ -41,8 +49,8 @@ class ScriptClient:
         self.entry = entry
         self.settings = settings or {}
         self.timeout = timeout or entry.get("timeout") or DEFAULT_TIMEOUT
-        self.python = python or os.environ.get("BRAINCTL_PYTHON") or sys.executable
         self.py_dir = vault.path(".brain/python")
+        self.python = python or venv_python(vault)
 
     @classmethod
     def for_impl(cls, vault, impl):
@@ -55,7 +63,7 @@ class ScriptClient:
             raise ClientError("unsupported", f"{command} is not in the Python workspace registry")
         settings = dict(impl.storage.get("settings") or {})
         timeout = impl.storage.get("timeout_seconds")
-        return cls(vault, name, entry, settings, timeout)
+        return cls(vault, name, entry, settings, timeout, python=venv_python(vault))
 
     # ---- approval ---------------------------------------------------------------------------------------------------
     def check_approved(self):

@@ -43,6 +43,7 @@ match the lock, from the lock without re-resolving), and **run** (run a script i
 
 Rules:
 - **Adding a dependency needs approval.** The agent shows the package, the version constraint and the resulting lock diff before anything is installed, since this runs third-party code and uses the network.
+- **One environment.** `brainctl` and every script run in `.brain/python/.venv`, never in the system Python or any other environment. Whatever the tool (uv, poetry with in-project virtualenvs, pdm, venv + pip), the environment lives at `.venv` in the workspace so the plugin can find its interpreter directly.
 - **A fresh clone** has no `.venv`. The plugin runs **sync** on first use (or via `/brain python sync`), after confirmation because it installs packages.
 - **Python version** *(Decided)*: the workspace requires a recent minimum minor version, **Python 3.12** (`requires-python = ">=3.12"`). The plugin ships this minimum and raises it deliberately in a later release (a core migration, doc 02). See Python interpreter below.
 - **POSIX only** *(Decided)*: Linux and macOS are supported in the MVP. Windows is deferred (`deferred.md`).

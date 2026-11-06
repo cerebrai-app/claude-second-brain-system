@@ -100,6 +100,14 @@ class Builder:
         shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__", "test_*.py"))
         return dst
 
+    def fake_venv(self):
+        """A stand-in for the workspace virtualenv: `.venv/bin/python` that runs this test interpreter."""
+        path = self.path(".brain/python/.venv/bin/python")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as fh:
+            fh.write(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
+        os.chmod(path, 0o755)
+
     def write_manifest(self):
         lines = ["core_version: 1", "migrations: []", "implementations:"]
         for (t, n) in sorted(self.vault().impls):

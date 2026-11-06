@@ -21,7 +21,7 @@ def front(path):
 
 def test_the_expected_skills_exist():
     names = {os.path.basename(os.path.dirname(p)) for p in SKILLS}
-    assert names == {"core", "setup", "capture", "triage", "sync", "pending", "run", "validate", "python", "backend"}
+    assert names == {"core", "setup", "capture", "triage", "sync", "pending", "run", "validate", "python", "backend", "upgrade"}
 
 
 @pytest.mark.parametrize("path", SKILLS, ids=lambda p: os.path.basename(os.path.dirname(p)))
@@ -33,7 +33,7 @@ def test_skill_front_matter(path):
 
 def test_mutating_skills_are_not_model_invocable():
     flags = {os.path.basename(os.path.dirname(p)): front(p).get("disable-model-invocation") for p in SKILLS}
-    assert {n for n, v in flags.items() if v} == {"setup", "triage", "pending", "run"}
+    assert {n for n, v in flags.items() if v} == {"setup", "triage", "pending", "run", "upgrade"}
 
 
 @pytest.mark.parametrize("path", STARTERS, ids=lambda p: os.path.basename(p))

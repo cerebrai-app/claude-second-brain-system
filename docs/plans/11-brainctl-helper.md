@@ -11,8 +11,9 @@ adopting hand-written files, hashing a script for approval. In the rehearsal, do
 ## Shape *(Decided)*
 
 - **Runs in the vault's Python workspace** (doc 07), which is therefore **required**. It uses `ruamel.yaml` (locked in the workspace) so frontmatter round-trips with comments and key order intact.
-- **Shipped in the plugin** at `plugins/brain/tools/brainctl/`; setup **copies** its modules (not its tests) to `.brain/python/brainctl/`, so the vault pins the version it uses. Its version is recorded in the manifest (`helper_version`); a core migration updates the copy. It is plugin code, not user code: it is not part of a
+- **Shipped in the plugin** at `plugins/brain/tools/brainctl/`; setup **copies** its modules (not its tests) to `.brain/python/brainctl/`, so the vault pins the version it uses. Its version is recorded in the manifest (`helper_version`); `/brain:upgrade` copies the files that differ from the plugin's version (new and changed files only, nothing else is touched or migrated) and records the new version; a core migration may also adapt the copy. It is plugin code, not user code: it is not part of a
   script's approval hash and cannot be edited through the `python` skill.
+- **Runs only in the workspace virtualenv** (`.brain/python/.venv`). An installed copy refuses to start under any other interpreter (`wrong_environment`, exit 2); only a copy run from the plugin source (development, tests) is exempt. Script adapters and hooks written as workspace scripts get the same rule from the client: it runs them with `.venv/bin/python` and fails with `unavailable` when the environment does not exist (sync the workspace first).
 - Invoked through the workspace tool from `.brain/python`, for example `uv run --frozen python -m brainctl <command>`; the skills use the tool recorded in `python.tool`.
 - **Non-interactive.** It never prompts, never commits, and makes no network calls itself (script adapters make their own). Structured input is JSON on stdin; results are JSON on stdout; diagnostics go to stderr; the exit code maps to the storage error codes (doc 03) plus `0` for success.
 - **Never trusted blindly.** It validates every write against the schemas on disk. A command that needs a human decision (an approval, a conversion resolution) takes the decision as input; the skill obtains it from the user.
@@ -121,4 +122,4 @@ Built incrementally, each step usable alone:
 
 1. Implement step 4 onward from the list above: `create`, `update`, `archive`, `unarchive`, `delete`, then `convert`. Until `create`/`update` exist, the skills write item files by hand and run `sync --refresh`.
 2. Update the skills to call `brainctl` and to forbid hand-writing item files (done in the same change as each command lands).
-3. Add the helper version and copy step to the migration doc (doc 02).
+3. ~~Helper copy step~~ — done as `/brain:upgrade` (copies changed files; `helper_version` in the manifest). Still to do: tell migrations (doc 02) to call it, and a session-start check that warns when the vault's copy is older than the plugin's.

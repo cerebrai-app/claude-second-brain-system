@@ -94,11 +94,17 @@ def test_the_installed_copy_runs_from_the_workspace_directory(b):
     cwd = b.path(".brain/python")
     env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
     r = subprocess.run([sys.executable, "-m", "brainctl", "validate"], cwd=cwd, capture_output=True, text=True, env=env)
+    assert r.returncode == 2 and json.loads(r.stdout)["error"] == "wrong_environment"        # not the workspace venv: refused
+    import ruamel.yaml
+    subprocess.run([sys.executable, "-m", "venv", "--without-pip", ".venv"], cwd=cwd, check=True)     # a real workspace venv
+    py = os.path.join(cwd, ".venv", "bin", "python")
+    env["PYTHONPATH"] = os.path.dirname(os.path.dirname(os.path.dirname(ruamel.yaml.__file__)))        # stands in for the locked ruamel.yaml
+    r = subprocess.run([py, "-m", "brainctl", "validate"], cwd=cwd, capture_output=True, text=True, env=env)
     assert r.returncode == 0, r.stderr
     assert json.loads(r.stdout)["ok"] is True
-    r = subprocess.run([sys.executable, "-m", "brainctl", "id"], cwd=cwd, capture_output=True, text=True, env=env)
+    r = subprocess.run([py, "-m", "brainctl", "id"], cwd=cwd, capture_output=True, text=True, env=env)
     assert len(r.stdout.strip()) == 26
-    r = subprocess.run([sys.executable, "-I", ".brain/python/brainctl/ids.py", "ulid"], cwd=b.root, capture_output=True, text=True, env=env)
+    r = subprocess.run([py, "-I", ".brain/python/brainctl/ids.py", "ulid"], cwd=b.root, capture_output=True, text=True, env=env)
     assert len(r.stdout.strip()) == 26                                  # ids.py also works standalone, as the core skill uses it
     assert not os.path.exists(b.path(".brain/python/brainctl/test_ids.py"))
 

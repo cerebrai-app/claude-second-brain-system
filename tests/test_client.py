@@ -1,6 +1,7 @@
 """The script adapter client: approval, scrubbed environment, timeouts, rate-limit retry, and sync/list/validate over a script binding."""
 import json
 import os
+import sys
 
 import pytest
 
@@ -31,6 +32,7 @@ def register(b, name, source, requires_env=(), approve=True, timeout=20):
 
 
 def bind(b, tmp_path, name="remote", type_="task", **storage):
+    b.fake_venv()
     store = str(tmp_path / "store.json")
     extra = "".join(f"  {k}: {json.dumps(v)}\n" for k, v in storage.items())
     b.write(f".brain/impls/{type_}/{name}.md",
@@ -228,3 +230,25 @@ def test_validate_reports_a_failing_describe_and_missing_env(b, tmp_path):
     bind(b, tmp_path)
     codes = [f["code"] for f in validate_mod.validate(b.vault())]
     assert "adapter-describe" in codes and "adapter-env-missing" in codes
+
+
+def test_scripts_run_only_in_the_workspace_venv(b, tmp_path):
+    b.install_helper()
+    register(b, "remote", open(TEMPLATE).read())
+    bind(b, tmp_path)
+    os.remove(b.path(".brain/python/.venv/bin/python"))                    # no environment: nothing runs, whatever interpreter is current
+    with pytest.raises(client.ClientError) as err:
+        client.ScriptClient.for_impl(b.vault(), impl_of(b))
+    assert err.value.code == "unavailable" and ".venv" in err.value.message
+    assert not hasattr(client, "sys")
+
+
+def test_the_venv_interpreter_is_the_one_used(b, tmp_path):
+    b.install_helper()
+    register(b, "remote", "import json\nprint(json.dumps({'ok': True, 'result': {}}))\n")
+    bind(b, tmp_path)
+    marker = tmp_path / "used-venv"
+    with open(b.path(".brain/python/.venv/bin/python"), "w") as fh:
+        fh.write(f'#!/bin/sh\ntouch "{marker}"\nexec "{sys.executable}" "$@"\n')
+    client.ScriptClient.for_impl(b.vault(), impl_of(b)).call("describe")
+    assert marker.exists()

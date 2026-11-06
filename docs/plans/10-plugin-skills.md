@@ -22,6 +22,7 @@ All live in `plugins/brain/skills/<name>/SKILL.md`. A plugin skill is invoked as
 | `run` | `/brain:run` | no | Listing rules and running `manual` rules (doc 05). |
 | `validate` | `/brain:validate` | yes | Vault health checks and repair proposals (docs 06, 07, 08). |
 | `python` | `/brain:python` | yes | The managed Python workspace and the "prefer a script to repetition" rule (doc 07). |
+| `upgrade` | `/brain:upgrade` | no | Copying the changed files of the plugin's `brainctl` into the vault's pinned copy (doc 11). |
 | `backend` | `/brain:backend` | yes | Specifying, building, testing, binding and changing a storage backend for an outside service (doc 12). |
 
 "Not model-invocable" skills change data or apply approvals, so only the user starts them. `capture`, `sync`, `validate`, `python` and `backend` may also be started by Claude when the user's request calls for them (each has its own approval checkpoints).

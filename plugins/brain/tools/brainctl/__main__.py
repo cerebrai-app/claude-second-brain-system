@@ -1,6 +1,7 @@
 """Command line: python -m brainctl [--vault PATH] <command> ...   (run from .brain/python; the vault is found by walking up)."""
 import argparse
 import json
+import os
 import sys
 
 from . import __version__, approval, client as client_mod, ids, sync as sync_mod, util, validate as validate_mod
@@ -153,10 +154,27 @@ def build_parser():
     return p
 
 
+def environment_problem(package_dir=None, prefix=None):
+    """An installed copy (inside <vault>/.brain/python) must run in that workspace's virtualenv, and nowhere else."""
+    package_dir = os.path.realpath(package_dir or os.path.dirname(os.path.abspath(__file__)))
+    workspace = os.path.dirname(package_dir)
+    if os.path.basename(workspace) != "python" or os.path.basename(os.path.dirname(workspace)) != ".brain":
+        return None                      # running from the plugin source (development, tests): no workspace to enforce
+    expected = os.path.join(workspace, ".venv")
+    if os.path.realpath(prefix or sys.prefix) != os.path.realpath(expected):
+        return (f"brainctl must run in the workspace environment ({expected}), not {prefix or sys.prefix}. "
+                "Run it through the workspace tool from .brain/python, for example `uv run --frozen python -m brainctl ...`.")
+    return None
+
+
 def main(argv=None):
     args = build_parser().parse_args(argv)
     return args.fn(args)
 
 
 if __name__ == "__main__":
+    problem = environment_problem()
+    if problem:
+        print(util.dumps({"ok": False, "error": "wrong_environment", "message": problem}))
+        sys.exit(EXIT_USAGE)
     sys.exit(main())

@@ -45,7 +45,7 @@ A fresh adapter on an empty sandbox is driven through the same JSON path as the 
 `brainctl/client.py` runs a registered script once per operation, as the contract in docs 03 and 07 describes:
 
 - The script must be in `registry.yml` and approved for its current hash; otherwise the call fails with `unauthorized` and nothing runs.
-- A scrubbed environment: a minimal base plus only the script's `requires_env`. `PYTHONPATH` is the workspace, so `brainctl.adapter` and `lib/` import. The interpreter is the one running `brainctl` (override with `BRAINCTL_PYTHON`, for example the workspace venv's).
+- A scrubbed environment: a minimal base plus only the script's `requires_env`. `PYTHONPATH` is the workspace, so `brainctl.adapter` and `lib/` import. The interpreter is always the workspace virtualenv's (`.brain/python/.venv/bin/python`); there is no fallback to the calling or a system Python, and a missing environment fails the call with `unavailable`.
 - A timeout per call (`storage.timeout_seconds`, else the registry `timeout`, else 30 seconds); a timeout is `unavailable`.
 - `rate_limited` is retried once after a minute; a second one in a row fails.
 - `list` is followed through every cursor.
