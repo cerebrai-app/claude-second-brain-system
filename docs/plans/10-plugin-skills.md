@@ -49,7 +49,18 @@ through `/brain:*` itself. The vault commits are the record.
 **What worked:** the setup order and manifest-last idea, plain-update and conversion triage, the half-converted marker plus validate finding the duplicate, deferral of `claude` proposals to the pending queue with a staleness check, the journal vault rule
 (idempotent `replace_section`), and the Python workspace on `uv` (`init --bare`, `lock`, `sync --frozen`, `run --frozen`, even with a scrubbed environment).
 
-### Needs a decision or a design change
+### Decisions taken after the rehearsal
+
+- **1 and 2 (hand-editing, ids):** yes to a deterministic helper, `brainctl` (doc 11), running in the Python workspace, which is now **required**. `ids.py` (ULID and slug generation, with tests) is shipped; the rest is specified.
+- **Human-readable file names:** items are named by a `slug` (doc 08), fixed at creation; path templates gain `{slug}` and `{field:FORMAT}` (doc 03). Journal notes get date file names from a date title or a formatted date field.
+- **3 (Areas):** Areas are top-level and never triaged.
+- **4 (automation-created items):** `place:` on `create_item` and on `write_body` targets (doc 05); without it the item lands in the Inbox and the rule gets a warning.
+- **5 (hand-written files):** sync adopts them automatically and additively, and reports them (doc 05).
+- **6 (sync across bindings):** matched by ref across bindings, so a conversion is one `update` with `impl` changed. *Proposed by me; you were unsure.*
+- **7 (defaults on conversion):** schema defaults apply, shown as *filled by default*. *Proposed by me; you were unsure.*
+- **Small fixes 13 to 15 and gaps 8, 9, 12:** setup and validate now check ignored paths and add negations, skip redundant lines, and add `.gitkeep`; file formats and the approval hash are in doc 11; duplicate refs are a validate check. Still open: gap 10 (template variables and formatters in rules) and gap 11 (blocked rules) is now in `validate`.
+
+### Findings as first recorded (items marked above are decided)
 
 1. **Hand-editing is the weak point.** Writing items as markdown by hand means Claude must also maintain `updated`, `revision`, the sync seen state, the id index and conversion markers, and move files. During the rehearsal I forgot to refresh the seen state after my own writes (sync then reported
    them as external updates) and forgot `updated` once. These steps are deterministic and error-prone as prose. **Recommendation:** ship a small deterministic helper (a script in the workspace or the plugin) for create, update, archive, validate and sync, and have the skills call it instead of describing the steps.
@@ -77,8 +88,9 @@ through `/brain:*` itself. The vault commits are the record.
 
 ## Next steps
 
-1. Decide the rehearsal findings above (especially 1, 3, 4, 5 and 6), then fix the skills and references.
-2. Write the migration skill (and the session-start hook).
-3. Write `brain_adapter.py`, the deterministic helper and the workspace starter files.
-4. Specify system-provided views and rules.
-5. Try the skills end to end against a scratch vault and fix what the rehearsal exposes.
+1. Implement `brainctl` (doc 11, from `validate` onward) and move the skills onto it.
+2. Define template variables and formatters for rules (`{{ today }}`, `| checklist`).
+3. Write the migration skill (and the session-start hook).
+4. Write `brain_adapter.py` and the workspace starter files.
+5. Specify system-provided views and rules.
+6. Re-run the rehearsal on the scratch vault, with the new slug paths, once `brainctl` can validate and sync. Try the skills end to end against a scratch vault and fix what the rehearsal exposes.

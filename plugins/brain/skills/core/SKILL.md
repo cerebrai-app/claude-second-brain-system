@@ -25,6 +25,8 @@ Detail lives in the reference files next to this skill. Read the one you need be
 7. **Show diffs, then apply.** For anything beyond a trivial edit, show the user what will change. Changes proposed by Claude actions need per-proposal approval (see the automation reference).
 8. **Keep derived state out of git.** `.brain/index/`, `.brain/cache/`, `.brain/automation/seen|pending|log.jsonl`, `.brain/conversions/`, `.brain/python/.venv/` are ignored; never commit them.
 9. **Do not commit unless the user asks** (setup and triage offer a commit at the end).
+10. **Ids and slugs come from the helper, never from you.** New ULID: `python3 -I .brain/python/brainctl/ids.py ulid`. New slug (unique in the target directory): `python3 -I .brain/python/brainctl/ids.py slug "<title>" --dir <directory>`. Never invent an id.
+11. **Keep derived state in step after every write** until `brainctl` (see `docs/plans/11-brainctl-helper.md`) does it for you: refresh `updated` (and `completed` when a task or project's status category changes), update the sync seen state for the item, the refs index, and the id index for script adapters. Forgetting the seen state makes sync report your own edits as outside changes.
 
 ## Defaults for new items
 

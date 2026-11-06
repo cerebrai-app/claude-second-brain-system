@@ -14,6 +14,7 @@ Currently there is a single plugin, `brain` (`plugins/brain/`), intended to beco
 - `plugins/<plugin-name>/.claude-plugin/plugin.json` — per-plugin manifest (`name`, `description`, `version`, `author`). This is what Claude Code reads when a user runs `/plugin install <plugin-name>@<marketplace-name>`.
 - `plugins/<plugin-name>/skills/` — where that plugin's skills live (one subdirectory per skill, each with a `SKILL.md`). The `brain` plugin's skills are listed in `docs/plans/10-plugin-skills.md`; they restate the design docs, so update the matching skill or `core/references/` file whenever a design doc changes. A plugin can also define `commands/`, `agents/`, or `hooks/` directories following the same convention once those are introduced.
 - `plugins/brain/starters/<type>/default-<type>.md` — the built-in starter implementation definitions that `/brain setup` copies into a vault's `.brain/impls/`. Design docs for the whole system are in `docs/plans/` (see `docs/plans/09-starter-implementations.md`).
+- `plugins/brain/tools/brainctl/` — the deterministic helper that `/brain:setup` copies into a vault's `.brain/python/brainctl/` (currently only `ids.py`, with tests: `cd plugins/brain/tools/brainctl && python3 -m unittest -v test_ids`). Spec in `docs/plans/11-brainctl-helper.md`.
 - Keep plugin and marketplace `version` fields in sync when bumping a plugin's version — the marketplace entry is not derived automatically from the plugin manifest.
 
 ## GitHub Agentic Workflows (gh-aw)
