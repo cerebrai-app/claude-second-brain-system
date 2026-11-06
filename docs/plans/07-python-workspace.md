@@ -5,7 +5,7 @@ Status: **Draft** · Depends on: [03 — Storage Contract](03-storage-contract.m
 ## Goal
 
 Give the vault a managed Python project where deterministic, reusable code lives: scripts the user writes, and scripts the brain agents write for repetitive work. The same
-workspace hosts the code behind hooks (doc 05) and `script` adapters (doc 03), including adapters that use third-party SDKs (for example Todoist for tasks, Notion for notes).
+workspace hosts the code behind hooks (doc 05) and `script` adapters (doc 03), including adapters that use any third-party SDK or remote API a user's chosen backend needs. The plugin has no built-in list of supported services; Todoist and Notion appear in this doc only as examples.
 Anything an agent does repeatedly and deterministically should become a script here instead of being re-derived each session.
 
 ## Location and layout
@@ -60,10 +60,10 @@ scripts:
     timeout: 30                       # seconds
     created_by: agent                 # agent | user
     approved: { sha256: "ab12...", at: 2026-11-06, by: user }
-  - name: todoist-tasks
-    path: scripts/todoist_tasks.py
-    description: Script adapter backing the todoist-task implementation.
-    requires_env: [TODOIST_TOKEN]
+  - name: example-tasks-backend      # illustrative: any remote service's adapter
+    path: scripts/example_tasks_backend.py
+    description: Script adapter backing an external task service.
+    requires_env: [EXAMPLE_API_TOKEN]
     timeout: 60
     created_by: agent
     approved: { sha256: "cd34...", at: 2026-11-06, by: user }
@@ -81,14 +81,15 @@ on non-zero exit. A script gets only the environment variables listed in its `re
 Anywhere the plugin takes a command, the form `python:<name>` runs a registered workspace script through the project's tool:
 
 - a `hook` action: `run: "python:log-completion"` (doc 05);
-- a `script` adapter binding: `command: "python:todoist-tasks"` (doc 03).
+- a `script` adapter binding: `command: "python:example-tasks-backend"` (doc 03).
 
 Both existing forms (a path to any executable) keep working; `python:` is the way to use the managed environment and its dependencies.
 
 ### Backends written as scripts
 
-A `script` adapter implemented here may call any third-party API with its SDK, which is how an external system (Todoist, Notion, ...) becomes a storage backend. Its SDK goes in the project
-dependencies and lock. The script follows the adapter contract (doc 03): `describe`, `create`, `read`, `update`, `list`, `resolve`, `archive` and the rest, with credentials from
+A `script` adapter implemented here may call **any** remote API, through whichever SDK or HTTP client the backend needs, which is how an external system becomes a storage backend for any
+core type. The services are the user's choice (for example Todoist for tasks, or Notion for notes, purely as illustrations); nothing in the plugin is specific to them. The SDK goes in the project
+dependencies and lock, and is added through the approved dependency flow above. The script follows the adapter contract (doc 03): `describe`, `create`, `read`, `update`, `list`, `resolve`, `archive` and the rest, with credentials from
 `requires_env`.
 
 ### Access to vault data: unrestricted *(Decided)*
