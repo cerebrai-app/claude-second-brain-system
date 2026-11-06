@@ -22,21 +22,23 @@ Per the storage contract (doc 03), an item has envelope-level properties and `fi
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `title` | string | yes (not Person) | Non-empty after trimming. Person uses `name` instead. |
-| `tags` | map: tag name → value | no (default `{}`) | Free-form labels with optional values *(Decided: on all five extensible types; not on `Archive`)*. See Tags. |
+| `tags` | `Map<String, String>` | no (default `{}`) | Free-form labels with optional string values *(Decided: on all five extensible types; not on `Archive`)*. See Tags. |
 | `body` | markdown string | no (Note: present, may be empty) | Envelope-level. Adapters may not support it (`supports_body`, doc 03). |
 
-**Tags** *(Decided)*. A tag has a **name** and a **value**:
+**Tags** *(Decided)*. `tags` is a **`Map<String, String>`**: tag name → string value. There is no hierarchy.
 
 ```yaml
 tags:
-  urgent: true                    # a bare tag: value true
-  work/acme: { stage: proposal }  # names may contain "/" and "."
-  review.due: 2026-12-01          # the value can be any YAML value
+  urgent: ""                  # a bare tag: empty-string value
+  work/acme: proposal         # "/" and "." are ordinary characters in a name
+  review.due: "2026-12-01"
 ```
 
-- **Names** are non-empty strings, trimmed and lowercased on write, with no whitespace or control characters. `.` and `/` are allowed (and any other character, quoted in YAML as needed). Names are unique per item (case-insensitive) and keep their order. `/` and `.` are conventions for grouping, not syntax: **names are opaque**, with no built-in hierarchy semantics. Natural-language filters (doc 04) and rules can reason about them (for example "tags under `work/`").
-- **Values** can be anything YAML can express (scalar, list or map) and are not validated or normalized. A bare tag has the value `true`.
-- **Shorthand:** a list of names is accepted on input (`tags: [urgent, work/acme]`) and normalized to the map form with value `true`.
+- **Names** are non-empty strings, trimmed and lowercased on write, with no whitespace or control characters. `.` and `/` are allowed like any other character; they have **no meaning to the plugin** (no parent/child
+  relationship, no prefix matching). Names are unique per item (case-insensitive) and keep their order.
+- **Values** are strings, not normalized. A bare tag has the empty string as its value.
+- **Shorthand on input:** a list of names (`tags: [urgent, work/acme]`) is accepted and normalized to the map with empty-string values. Scalar YAML values (numbers, booleans, dates) are converted to their string
+  form; a list or map as a value is an error.
 - Tags are unvalidated labels with no schema. They are not traits (doc 01, Person only; traits add namespaced, validated fields) and not relations (links to other items). Filters, sorts and rule `match` can test a tag's presence, name and value.
 
 ## Status values and categories *(Decided)*
@@ -184,18 +186,19 @@ Where a name is a core name for one type (for example `owner` on Project) it is 
 | `Task.blocked_by` cycle | warning |
 | Dangling relation target | reported by the validation pass (doc 03), not by the write |
 | Relation to an archived item | warning |
-| `tags` names not normalized (case, whitespace), or a list shorthand | fixed silently on write |
+| `tags` names not normalized (case, whitespace), a list shorthand, or a scalar non-string value | fixed silently on write |
+| `tags` value that is a list or map | error |
 | `completed` set or changed directly | error (maintained by the plugin) |
 | Person `name` not a map, or all parts empty | error |
 | Reserved key used as an implementation name | error at definition load |
 
 ## Open questions
 
-1. ~~Tag syntax~~ — resolved: names may contain `.` and `/`; values can be any YAML value (tags are a name → value map, list shorthand accepted); names are opaque with no hierarchy semantics.
+1. ~~Tag syntax~~ — resolved: tags are a **`Map<String, String>`**; names may contain `.` and `/` as ordinary characters; there is **no hierarchy**; list shorthand accepted.
 2. ~~Person `name`~~ — resolved: **structured** (`given`, `middle`, `family`, `nickname`, `display`, at least one non-empty).
 3. ~~Dates~~ — resolved: add a core **`completed`** timestamp to Task and Project, maintained by the plugin; `due` and `start` stay implementation fields.
 4. ~~Maximum `Area.parent` depth~~ — resolved: **no maximum** (cycles are still an error).
-5. **Tag values on external backends.** Backends with label-only tags cannot store values. Does an adapter drop the values, store them in a side field, or declare `supports_tag_values: false` (doc 03) and be refused for implementations that use them?
+5. **Tag values on external backends.** Backends with label-only tags cannot store values (key/value label systems fit the string map directly). Does an adapter drop the values, store them in a side field, or declare `supports_tag_values: false` (doc 03) and be refused for implementations that use them?
 
 ## Next steps
 

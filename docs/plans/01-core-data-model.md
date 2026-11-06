@@ -50,7 +50,7 @@ Summary only; fields, relations, cardinality, status rules and reserved names ar
 | `Person` | Someone you interact with. **Top-level:** not placed in any Area or Project, and never in the Inbox | `name` (structured: `given`, `family`, ...) | Named relations to any item (names are chosen by the implementation or the user, e.g. `works_with`, `owner_of`); no required relation |
 | `Archive` | Holds retired objects of any type | `title` | `contains` → any item except Archive |
 
-All five extensible types also have an optional `tags` map (tag name → value, doc 08), and Task and Project have a plugin-maintained `completed` timestamp. Core fields are deliberately minimal; implementations add the rest. **`Archive` is the exception: it cannot be extended.**
+All five extensible types also have an optional `tags` map (`Map<String, String>`, no hierarchy, doc 08), and Task and Project have a plugin-maintained `completed` timestamp. Core fields are deliberately minimal; implementations add the rest. **`Archive` is the exception: it cannot be extended.**
 
 ### Archive
 
