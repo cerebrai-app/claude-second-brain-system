@@ -26,6 +26,8 @@ def _need(op, *keys):
 
 def apply_operation(vault, op):
     """Run one operation; returns the store result. Raises StoreError (a bad or failing operation changes nothing)."""
+    if isinstance(op, dict) and "op" not in op and "action" in op:          # a rule action works as it is written
+        op = dict(op, op=op["action"])
     if not isinstance(op, dict) or op.get("op") not in OPERATIONS:
         raise StoreError("unsupported", f"operation {op.get('op') if isinstance(op, dict) else op!r} is not one of {', '.join(OPERATIONS)}")
     kind = op["op"]

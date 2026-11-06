@@ -343,3 +343,8 @@ def test_place_errors(b, v):
     with pytest.raises(StoreError) as e:
         pending.apply_operation(v, {"op": "create_item", "type": "note", "title": "x", "place": {"find": {"type": "area", "where": {"title": "Dup"}}}})
     assert e.value.code == "conflict"
+
+
+def test_op_accepts_a_rule_action_as_written(b, v):
+    made = pending.apply_operation(v, {"action": "create_item", "type": "note", "title": "From a rule"})
+    assert made["path"] == "notes/from-a-rule.md"
