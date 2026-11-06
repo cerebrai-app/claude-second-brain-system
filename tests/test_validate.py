@@ -382,7 +382,7 @@ def vault_rules(b, text):
 
 def test_vault_rules_must_be_manual_and_declare_what_they_require(b):
     b.impl("note", "journal", path="journal/{slug}.md")
-    vault_rules(b, """automation:
+    vault_rules(b, """rules:
   - id: ok
     requires: [ { type: note, impl: journal } ]
     on: manual
@@ -402,13 +402,13 @@ def test_vault_rules_must_be_manual_and_declare_what_they_require(b):
 
 def test_vault_rule_blocked_by_a_missing_or_old_implementation(b):
     b.impl("note", "journal", path="journal/{slug}.md", version=1)
-    vault_rules(b, "automation:\n  - id: r\n    requires: [ { type: note, impl: journal, min_version: 2 }, { type: task, impl: ghost } ]\n    on: manual\n    do: []\n")
+    vault_rules(b, "rules:\n  - id: r\n    requires: [ { type: note, impl: journal, min_version: 2 }, { type: task, impl: ghost } ]\n    on: manual\n    do: []\n")
     assert len([f for f in run(b) if f["code"] == "rule-blocked"]) == 2
 
 
 def test_vault_rule_closed_world_and_place(b):
     b.impl("note", "journal", path="journal/{slug}.md")
-    vault_rules(b, """automation:
+    vault_rules(b, """rules:
   - id: r
     requires: [ { type: note, impl: journal } ]
     on: manual
@@ -427,12 +427,12 @@ def test_vault_rule_closed_world_and_place(b):
 
 def test_vault_rule_without_place_warns(b):
     b.impl("note", "journal", path="journal/{slug}.md")
-    vault_rules(b, "automation:\n  - id: r\n    requires: [ { type: note, impl: journal } ]\n    on: manual\n    do:\n      - action: write_body\n        target: { find: { type: note, impl: journal }, create_if_missing: true }\n")
+    vault_rules(b, "rules:\n  - id: r\n    requires: [ { type: note, impl: journal } ]\n    on: manual\n    do:\n      - action: write_body\n        target: { find: { type: note, impl: journal }, create_if_missing: true }\n")
     assert has(run(b), "rule-unplaced", "warning")
 
 
 def test_invalid_vault_automation_yaml(b):
-    vault_rules(b, "automation: [\n")
+    vault_rules(b, "rules: [\n")
     assert has(run(b), "automation-invalid", "error")
 
 
@@ -483,16 +483,16 @@ def test_script_impl_timeout_must_be_a_positive_integer(b):
 def test_unless_exists_needs_a_type_and_a_where(b):
     b.impl("note", "journal", path="journal/{slug}.md")
     for bad in ("{ type: note }", "{ where: { title: x } }", "{ type: spaceship, where: { title: x } }", "[ title ]"):
-        vault_rules(b, f"automation:\n  - id: r\n    requires: [ {{ type: note, impl: journal }}, {{ type: area, impl: default-area }} ]\n    on: manual\n    do:\n      - {{ action: create_item, type: note, impl: journal, place: 'area:inbox', unless_exists: {bad} }}\n")
+        vault_rules(b, f"rules:\n  - id: r\n    requires: [ {{ type: note, impl: journal }}, {{ type: area, impl: default-area }} ]\n    on: manual\n    do:\n      - {{ action: create_item, type: note, impl: journal, place: 'area:inbox', unless_exists: {bad} }}\n")
         assert has(run(b), "unless-exists", "error"), bad
-    vault_rules(b, "automation:\n  - id: r\n    requires: [ { type: note, impl: journal }, { type: area, impl: default-area } ]\n    on: manual\n    do:\n      - { action: create_item, type: note, impl: journal, place: 'area:inbox', unless_exists: { type: note, impl: journal, where: { title: x } } }\n")
+    vault_rules(b, "rules:\n  - id: r\n    requires: [ { type: note, impl: journal }, { type: area, impl: default-area } ]\n    on: manual\n    do:\n      - { action: create_item, type: note, impl: journal, place: 'area:inbox', unless_exists: { type: note, impl: journal, where: { title: x } } }\n")
     assert not has(run(b), "unless-exists") and not has(run(b), "rule-undeclared-impl")
 
 
 def test_unless_exists_in_a_vault_rule_must_name_a_required_impl(b):
     b.impl("note", "journal", path="journal/{slug}.md")
     b.impl("note", "other", path="other/{slug}.md")
-    vault_rules(b, "automation:\n  - id: r\n    requires: [ { type: note, impl: journal } ]\n    on: manual\n    do:\n      - { action: create_item, type: note, impl: journal, place: 'area:inbox', unless_exists: { type: note, impl: other, where: { title: x } } }\n")
+    vault_rules(b, "rules:\n  - id: r\n    requires: [ { type: note, impl: journal } ]\n    on: manual\n    do:\n      - { action: create_item, type: note, impl: journal, place: 'area:inbox', unless_exists: { type: note, impl: other, where: { title: x } } }\n")
     assert has(run(b), "rule-undeclared-impl", "error")
 
 

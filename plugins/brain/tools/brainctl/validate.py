@@ -507,18 +507,18 @@ def _check_automation(vault, f):
         try:
             data = util.load_yaml_file(vault_file) or {}
             if not isinstance(data, dict):
-                raise ValueError("the file must be a mapping with an `automation:` list")
+                raise ValueError("the file must be a mapping with a `rules:` list")
             for key in data:
-                if key != "automation":
-                    f.error("automation-invalid", ".brain/automation.yml", f"unknown key {key!r}; the rules go in a top-level `automation:` list")
-            vault_rules = data.get("automation") or []
+                if key != "rules":
+                    f.error("automation-invalid", ".brain/automation.yml", f"unknown key {key!r}; the rules go in a top-level `rules:` list" + (" (`automation:` is the list inside an implementation definition)" if key == "automation" else ""))
+            vault_rules = data.get("rules") or []
             sources.append(("vault", ".brain/automation.yml", vault_rules, None, True))
         except Exception as exc:
             f.error("automation-invalid", ".brain/automation.yml", f"not valid YAML ({str(exc).splitlines()[0]})")
     registry = _load_registry(vault)
     for label, rel, rules, owner, is_vault in sources:
         if not isinstance(rules, list):
-            f.error("automation-invalid", rel, "`automation` must be a list")
+            f.error("automation-invalid", rel, "the rules must be a list (`rules:` in .brain/automation.yml, `automation:` in an implementation)")
             continue
         seen_ids = set()
         for index, rule in enumerate(rules):

@@ -3,7 +3,7 @@
 ## Where rules live
 
 - In an implementation's `automation:` list (`.brain/impls/<type>/<impl>.md`): event triggers and `manual`.
-- Vault-level, in `.brain/automation.yml` (a mapping whose only key is the `automation:` list): **`manual` only** in the MVP, ids namespaced `vault/<id>`, and every rule must list the implementations it needs in `requires: [{type, impl, min_version?}]`. A rule that references an implementation not in `requires`, or one that is missing/too old, is blocked (reported, not run, not deleted).
+- Vault-level, in `.brain/automation.yml` (a mapping whose only key is the `rules:` list; inside an implementation the list is called `automation:`): **`manual` only** in the MVP, ids namespaced `vault/<id>`, and every rule must list the implementations it needs in `requires: [{type, impl, min_version?}]`. A rule that references an implementation not in `requires`, or one that is missing/too old, is blocked (reported, not run, not deleted).
 - `schedule` triggers and non-interactive runs are **not supported yet**; reject a rule that uses `on: schedule`.
 
 ## Rule shape

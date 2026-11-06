@@ -19,7 +19,7 @@ Rules that span several implementations live at the **vault level** instead (nex
 ## Vault-level automation
 
 Some rules belong to no single implementation: a daily review that reads `task` items and writes into a `journal` note, a weekly roll-up per
-project. These live in `.brain/automation.yml`, a versioned vault config file with its own `automation:` list, migrated with the vault (doc 02).
+project. These live in `.brain/automation.yml`, a versioned vault config file whose only key is a `rules:` list (an implementation uses `automation:`), migrated with the vault (doc 02).
 
 **Restrictions** *(Decided)*:
 - Only the **`manual`** trigger in the MVP (**`schedule`** is post-MVP, see Scheduling). Event triggers (`create`, `update`, `capture`, `archive`, `unarchive`, `relation`,
@@ -32,7 +32,7 @@ project. These live in `.brain/automation.yml`, a versioned vault config file wi
 Every vault rule **must** list the implementations it depends on. A rule with no `requires` is invalid.
 
 ```yaml
-automation:
+rules:                               # .brain/automation.yml
   - id: daily-journal-tasks
     requires:
       - { type: task, impl: task }

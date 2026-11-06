@@ -97,7 +97,7 @@ def test_render_errors_exit_two(b, capsys):
 # ---- validate ---------------------------------------------------------------------------------------------------------
 
 def _rule(b, do):
-    b.write(".brain/automation.yml", "automation:\n  - id: r\n    on: manual\n    requires: [{ type: note, impl: default-note }]\n    do:\n" + do)
+    b.write(".brain/automation.yml", "rules:\n  - id: r\n    on: manual\n    requires: [{ type: note, impl: default-note }]\n    do:\n" + do)
     from brainctl import validate
     return validate.validate(b.vault())
 
@@ -120,8 +120,8 @@ def test_validate_checks_the_configured_time_zone(b):
     assert "config-timezone" in codes(validate.validate(b.vault()), "error")
 
 
-def test_a_misnamed_vault_rules_list_is_an_error_not_silence(b):
+def test_the_vault_rules_list_must_be_called_rules(b):
     from brainctl import validate
-    b.write(".brain/automation.yml", "rules:\n  - { id: r, on: manual }\n")
+    b.write(".brain/automation.yml", "automation:\n  - { id: r, on: manual }\n")
     found = validate.validate(b.vault())
-    assert any(f["code"] == "automation-invalid" and "rules" in f["message"] for f in found)
+    assert any(f["code"] == "automation-invalid" and "`rules:`" in f["message"] for f in found)
