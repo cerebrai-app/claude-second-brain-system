@@ -11,6 +11,7 @@ If there is a `.brain/` with no manifest, setup did not finish: tell the user to
 Detail lives in the reference files next to this skill. Read the one you need before acting:
 
 - [references/core-types.md](references/core-types.md): fields, relations, statuses, tags, traits, field types, reserved names.
+- [references/ids-and-slugs.md](references/ids-and-slugs.md): how ULIDs and slugs are made (the helper commands, slug rules).
 - [references/storage.md](references/storage.md): item shape, storage operations, archive, delete, conversion, adapters.
 - [references/automation.md](references/automation.md): rules, triggers, actions, approvals, the pending queue.
 
@@ -25,7 +26,7 @@ Detail lives in the reference files next to this skill. Read the one you need be
 7. **Show diffs, then apply.** For anything beyond a trivial edit, show the user what will change. Changes proposed by Claude actions need per-proposal approval (see the automation reference).
 8. **Keep derived state out of git.** `.brain/index/`, `.brain/cache/`, `.brain/automation/seen|pending|log.jsonl`, `.brain/conversions/`, `.brain/python/.venv/` are ignored; never commit them.
 9. **Do not commit unless the user asks** (setup and triage offer a commit at the end).
-10. **Ids and slugs come from the helper, never from you.** New ULID: `python3 -I .brain/python/brainctl/ids.py ulid`. Never invent an id. If the item's implementation declares a `slug` field, read the Slug section of its definition (`.brain/impls/<type>/<impl>.md`) for how to derive it; the defaults all have one. Quote a title in YAML when the plain form would load as another type (`2026-11-06`, `yes`, `010`).
+10. **Ids and slugs come from the helper, never from you.** Follow [references/ids-and-slugs.md](references/ids-and-slugs.md); a slug's source is in the Slug section of the implementation's definition (`.brain/impls/<type>/<impl>.md`).
 11. **Keep derived state in step after every write** until `brainctl` has `create`/`update`: refresh `updated` (and `completed` when a task or project's status category changes), then run `brainctl sync --refresh` so the sync seen state accepts your own write. Forgetting it makes the next sync report your edit as an outside change.
 12. **Check your work with `brainctl validate`** after changes that touch several items, and before offering a commit.
 

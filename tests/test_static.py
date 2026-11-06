@@ -50,7 +50,7 @@ def test_there_is_one_starter_per_extensible_type():
 
 
 def test_the_references_the_skills_point_at_exist():
-    for ref in ("core-types.md", "storage.md", "automation.md"):
+    for ref in ("core-types.md", "storage.md", "automation.md", "ids-and-slugs.md"):
         assert os.path.isfile(f"{REPO}/plugins/brain/skills/core/references/{ref}")
     for ref in ("adapter-protocol.md", "spec-template.md", "adapter-template.py", "test-template.py"):
         assert os.path.isfile(f"{REPO}/plugins/brain/skills/backend/references/{ref}")
