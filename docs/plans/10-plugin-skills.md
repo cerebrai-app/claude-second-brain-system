@@ -121,6 +121,17 @@ Wiped the scratch vault and reran steps 1 to 10 headless on brainctl 0.2.0 (then
 4. **Fixed: every item write was the model editing files.** `brainctl` 0.3.0 has `create`, `update`, `archive`, `unarchive`, `delete`, `convert`, `op`, `pending` and `log` for markdown bindings, and the skills call them. The next rehearsal should confirm the model uses them. Still hand-written by design: the Inbox at setup, and sync adoption of the user's own files. Script-adapter bindings answer `unsupported` for writes.
 5. **Fixed: run outcomes in the log were free text.** The vocabulary is fixed (doc 05, Logging) and `validate` checks it.
 
+## Fifth rehearsal (the write commands, brainctl 0.3.x)
+
+Wiped the vault and ran steps 1 to 10 headless with prompts that name no brainctl command, to see whether the skills steer the model to the helper. They did: every item write was `create`, `update`, `op`, `convert plan|apply|finish` or `pending add|apply`, and `log` lines came from the helper. The step 5 failure was real (the source file made immutable, so the delete failed): the helper returned `internal`, wrote the marker, `validate` showed `duplicate-ref` and `half-converted`, and `convert finish` cleared both. Hand edits (step 6) were the only events `sync` reported; none of the helper's own writes were. The vault ends with 0 errors and 0 warnings. Findings:
+
+1. **Fixed: `op create_item` ignored `place` and `unless_exists`.** The model had to create the Journals area and set the placement by hand. `op` now finds or creates the area, places the item, and skips with `exists` (0.3.1).
+2. **Fixed: `op` demanded `op:` where rules write `action:`.** It now accepts the action as written (0.3.2).
+3. **Fixed: refs were quoted in front matter** (`"project:01M..."`), unlike hand-written files. They are plain now.
+4. **Fixed: `create` gave no way to see the body landed.** The result reports `body_length`.
+5. **Open: definitions are still edited by hand.** Implementations, traits, vault rules and the manifest are written with the Edit tool. `brainctl` writes items only. A command to add an implementation or rule (validating it and updating the manifest) would close the last hand-edited area.
+6. **Open: `place` with `create_if_missing` creates the area with only the `where` fields,** and a `write_body` target is not handled by `op` (no `write_body` operation yet).
+
 ## Next steps
 
 1. Continue `brainctl` (doc 11): `create`, `update`, `archive`, `unarchive`, `delete`, `convert`. The `validate`, `sync` and `core` skills already call it.
