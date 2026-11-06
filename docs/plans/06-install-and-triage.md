@@ -45,7 +45,7 @@ In this order, so an interrupted run is recoverable:
 3. The **Archive** (`archive:archive`), registered with the chosen Archive adapter (doc 03).
 4. The **Inbox** area item (`area:inbox`, `system: true`) with `defaults` for each core type pointing at the starters. It is stored by `default-area`'s binding.
 5. `.gitignore` entries for derived, rebuildable state: `.brain/index/`, `.brain/cache/`, `.brain/automation/seen/`, `.brain/automation/pending/`,
-   `.brain/automation/log.jsonl`. (`.brain/id-index/` is committed, doc 03.) Existing entries are kept; missing ones appended.
+   `.brain/automation/log.jsonl`, `.brain/conversions/`. (`.brain/id-index/` is committed, doc 03.) Existing entries are kept; missing ones appended.
 6. **`.brain/manifest.yml` last** (doc 02): `core_version` = the plugin's current core version, empty `migrations`, and the `implementations` index for the starters.
 
 `.brain/automation.yml` (vault-level automation, doc 05) is **not** created at install; it is created on first use.
@@ -65,6 +65,7 @@ silently, so installing into an existing repo of notes causes no `create` event 
 - Exactly one Archive; the Inbox exists, is an Area, and cannot be deleted; its `defaults` name implementations that exist.
 - Impl ids are unique within each core type (doc 03), and there is exactly one **active** `person` implementation (plus at most one flagged `migration_target`, doc 01).
 - Required `.gitignore` entries present.
+- No leftover half-converted markers in `.brain/conversions/` (each offers to finish its conversion).
 
 Fixes (for example re-creating a deleted starter definition or the Inbox) are shown as a proposal and applied only on approval. A missing or mismatched Archive adapter is
 reported, never "fixed", since it is fixed at install.
@@ -164,8 +165,8 @@ suggestion is only a pre-filled choice the user confirms; nothing is applied aut
 5. Update the sync seen state for both bindings so the plugin's own conversion is not later detected as an external change (doc 05).
 
 **Failure.** Step 1 or 2 fails: nothing changed, report. Step 4 fails after 2 succeeded: the item exists twice (doc 03: `resolve` order picks the default binding). The plugin reports it
-and records a *half-converted* marker (the ref and both bindings) in `.brain/automation/pending/`-style local state; re-running triage on that item, or `/brain validate`, offers to
-**finish** by retrying the source delete. It never re-creates the item.
+and writes a *half-converted* marker to `.brain/conversions/<type>-<id>.json` (git-ignored) holding the ref, the source and target bindings, and a timestamp; re-running triage on that item, or `/brain validate`, finds the
+marker and offers to **finish** by retrying the source delete. The marker is removed once the delete succeeds. It never re-creates the item.
 
 **Events (doc 05).** A conversion is an `update` of the existing item, delivered to the **target** implementation's rules, with `changed` including `impl` and the placement relation. It
 does **not** fire `create` or `capture`, since the item is not new. Added or removed relations also fire `relation` events. Rules of the source implementation see nothing; permanent delete
@@ -183,7 +184,7 @@ Each triage operation is logged like a rule run (doc 05). For the markdown adapt
 3. ~~Bulk triage~~ — resolved: **deferred past the MVP.** Triage is one item at a time (see `deferred.md`).
 4. ~~Candidate discovery cost~~ — resolved: **the storage contract is unchanged** (no "relation absent" query key). Discovery filters client-side; where that is too slow, the flow is optimized **per adapter** as needed, guided by the latency log (doc 03).
 5. ~~Commit granularity~~ — resolved: **one commit per session**, offered at the end of `/brain triage`.
-6. **Half-converted marker location.** Reuses the pending-style local state in this draft; may deserve its own file under `.brain/`.
+6. ~~Half-converted marker location~~ — resolved: its own git-ignored file, `.brain/conversions/<type>-<id>.json`, removed when the source delete succeeds.
 7. **Bulk conversion command.** Selection (all items of an implementation, a filter), one combined report vs. per-item, and ordering/resumability for large vaults. Post-MVP.
 8. **Undoing a conversion.** Triage back to the original implementation is the only path; is a dedicated "undo last triage" worth having?
 
