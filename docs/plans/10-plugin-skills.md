@@ -88,6 +88,18 @@ through `/brain:*` itself. The vault commits are the record.
 15. Empty directories (`scripts/`, `lib/`, `tests/`) need a `.gitkeep`.
 16. The workspace `README.md` and a session-start hook are still unwritten (see Not yet written).
 
+## Second rehearsal (installed plugin, headless)
+
+The vault was wiped and rebuilt through the installed plugin (`claude -p`, steps 1 to 4 and 6 to 9 of `TESTING.md`; step 5 was not rerun). Setup, capture, `gtd-task`, triage with a conversion, sync with adoption, the pending queue, the journal rule and a script all worked as designed, and `validate` ended at 0 errors and 0 warnings. Findings:
+
+1. **A date-only journal path is rejected.** `journal/{created:%Y-%m-%d}.md` fails `validate` (a path template needs `{slug}` or `{id}`). Use `journal/{slug}.md` with the date as the slug; the file name is the same, and a clash gets `-02` instead of an overwrite. *Fixed in the rehearsal text.*
+2. **No structural "create unless it exists".** A manual rule that should do nothing on its second run needs a `when` condition, which Claude judges itself, so idempotence depends on Claude's reading. Open: an idempotency key on `create_item` (for example `unless: { match: ... }`) that `brainctl` could check.
+3. **One value per tag key.** Tags are a map, so a rule that asks for "two `topic` tags" can produce only one. Rule instructions should name distinct keys. Worth a `validate` hint for `claude` instructions? Open.
+4. **Sync adopts only files without identity fields.** A hand-written file with an `id` but no `slug` is not completed by sync; `validate` warns and a person fixes it. Open: let adoption fill a missing `slug` (and other additive fields) on files that already have an id.
+5. **Changing a project's `defaults.task` does not convert existing tasks.** As designed; only new tasks use the new implementation. The skill says so, and triage is the way to convert.
+6. **Ignored state was tracked.** A previous vault had committed `.brain/automation/seen/*`; setup now untracks them (`git rm --cached`) before its commit. Setup should do this by design, not by luck.
+7. **Headless runs need `-c`** (continue) to answer setup's confirmation, and `--allowedTools` for the file tools. `uv` chose Python 3.12.3 although 3.13 was installed; both satisfy the minimum.
+
 ## Next steps
 
 1. Continue `brainctl` (doc 11): `create`, `update`, `archive`, `unarchive`, `delete`, `convert`. The `validate`, `sync` and `core` skills already call it.
@@ -95,4 +107,4 @@ through `/brain:*` itself. The vault commits are the record.
 3. Write the migration skill (and the session-start hook).
 4. Write the workspace starter files.
 5. Specify system-provided views and rules.
-6. Re-run the rehearsal on the scratch vault, with the new slug paths, once `brainctl` can validate and sync. Try the skills end to end against a scratch vault and fix what the rehearsal exposes.
+6. Rehearsal rerun done once (above). Still to try: step 5 (the interrupted conversion) through the plugin, a real backend through `/brain:backend`, and `/brain:upgrade` on a vault with an older helper. Decide findings 2 to 4.
