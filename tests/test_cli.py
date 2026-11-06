@@ -231,3 +231,20 @@ def test_convert_commands(b, capsys):
     assert code == 1 and refused["error"]["code"] == "invalid"
     code, done = _run(b, capsys, "convert", "apply", made["ref"], "--to", "gtd", "--json", json.dumps({"fill": {"context": "work"}}))
     assert code == 0 and done["path"] == "tasks/gtd/plan.md"
+
+
+def test_definition_commands(b, capsys):
+    code, added = _run(b, capsys, "impl", "add", "--json", json.dumps({"type": "note", "impl": "journal", "path": "journal/{slug}.md"}))
+    assert code == 0 and added["ref"] == "note/journal"
+    code, shown = _run(b, capsys, "impl", "show", "note/journal")
+    assert shown["front"]["storage"]["path"] == "journal/{slug}.md"
+    rule = {"scope": "vault", "rule": {"id": "j", "on": "manual", "requires": [{"type": "note", "impl": "journal"}], "do": [{"action": "create_item", "type": "note", "impl": "journal", "title": "{{ today }}"}]}}
+    assert _run(b, capsys, "rule", "add", "--json", json.dumps(rule))[0] == 0
+    code, listed = _run(b, capsys, "rule", "list")
+    assert listed["count"] == 1
+    code, bad = _run(b, capsys, "rule", "add", "--json", json.dumps({"scope": "vault", "rule": {"id": "x", "on": "manual", "requires": [{"type": "note", "impl": "ghost"}], "do": []}}))
+    assert code == 1 and bad["error"]["code"] == "invalid" and bad["error"]["findings"]
+    assert _run(b, capsys, "rule", "remove", "j", "--scope", "vault")[0] == 0
+    assert _run(b, capsys, "rule", "remove", "j")[0] == 2
+    assert _run(b, capsys, "trait", "add", "--json", json.dumps({"name": "colleague"}))[0] == 0
+    assert cli.main(["--vault", b.root, "validate"]) == 0

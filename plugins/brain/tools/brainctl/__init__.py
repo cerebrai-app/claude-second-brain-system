@@ -3,5 +3,5 @@
 Runs inside the vault's Python workspace (`.brain/python/brainctl/`), needs `ruamel.yaml`, and never prompts or commits.
 """
 
-__version__ = "0.3.2"
+__version__ = "0.4.0"
 CORE_VERSION = 1  # the core model version this helper understands (docs/plans/02)

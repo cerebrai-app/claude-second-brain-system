@@ -4,7 +4,7 @@ import json
 import os
 import sys
 
-from . import __version__, approval, client as client_mod, ids, pending as pending_mod, store, sync as sync_mod, templates, util, validate as validate_mod
+from . import __version__, approval, client as client_mod, definitions, ids, pending as pending_mod, store, sync as sync_mod, templates, util, validate as validate_mod
 from .model import Vault
 
 EXIT_OK, EXIT_FINDINGS, EXIT_USAGE = 0, 1, 2
@@ -261,6 +261,29 @@ def cmd_pending(args):
     return _store_command(args, lambda v: pending_mod.reject(v, args.id))
 
 
+def cmd_impl(args):
+    if args.action == "show":
+        return _store_command(args, lambda v: definitions.impl_show(v, args.ref))
+    if args.action == "add":
+        return _store_command(args, lambda v: definitions.impl_add(v, _json_input(args)))
+    return _store_command(args, lambda v: definitions.impl_update(v, args.ref, _json_input(args)))
+
+
+def cmd_rule(args):
+    if args.action == "list":
+        return _store_command(args, lambda v: definitions.rule_list(v, args.scope))
+    if args.action == "add":
+        return _store_command(args, lambda v: definitions.rule_add(v, _json_input(args)))
+    if not args.scope or not args.id:
+        print("rule remove needs --scope and the rule id", file=sys.stderr)
+        return EXIT_USAGE
+    return _store_command(args, lambda v: definitions.rule_remove(v, args.scope, args.id))
+
+
+def cmd_trait(args):
+    return _store_command(args, lambda v: definitions.trait_add(v, _json_input(args)))
+
+
 def adapter_ops():
     from .adapter import OPERATIONS
     return OPERATIONS
@@ -324,6 +347,12 @@ def build_parser():
     s = writer("convert", "convert an item to another implementation of its type: plan | apply (JSON resolutions: drop, rename, fill) | finish", cmd_convert,
                args=[("action", {"choices": ["plan", "apply", "finish"]}), ("ref", {})])
     s.add_argument("--to", help="the target implementation id (plan, apply)")
+    s = writer("impl", "implementations: add (JSON: type, impl, from?, fields, path, ...) | update <type>/<impl> (JSON: set, unset, fields, remove_fields, body, bump) | show <type>/<impl>", cmd_impl,
+               args=[("action", {"choices": ["add", "update", "show"]}), ("ref", {"nargs": "?"})])
+    s = writer("rule", "rules: add (JSON: scope, rule, replace?) | remove <id> --scope S | list [--scope S]; scope is `vault` or <type>/<impl>", cmd_rule,
+               args=[("action", {"choices": ["add", "remove", "list"]}), ("id", {"nargs": "?"})])
+    s.add_argument("--scope", help="`vault` or <type>/<impl> (remove, list)")
+    writer("trait", "add a person trait (JSON: name, fields, body)", cmd_trait, args=[("action", {"choices": ["add"]})])
     writer("op", "apply one rule operation (set_field, set_relation, add_relation, archive, unarchive, create_item) from JSON", cmd_op)
     writer("log", "append a rule-run line to the automation log (JSON: rule, trigger, event, actions, outcome, ...)", cmd_log)
     s = writer("pending", "the pending-approval queue: add (JSON proposal) | list [--prune] | apply ID [JSON: edited operations] | reject ID", cmd_pending,

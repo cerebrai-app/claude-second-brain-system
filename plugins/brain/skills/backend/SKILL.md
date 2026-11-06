@@ -61,7 +61,7 @@ Copy [references/spec-template.md](references/spec-template.md) to `.brain/backe
 3. Register the script in `registry.yml` (`name`, `path`, `description`, `requires_env`, `timeout`, `created_by`) and run the approval flow from the `python` skill (show the script, then record the hash).
 
 ### 5. Bind (checkpoint: user approves the definition)
-Write `.brain/impls/<type>/<impl>.md`: `impl`, `extends`, `version: 1`, `schema.fields` for service-specific data, `status_values`, `storage: {adapter: script, command: "python:<name>", settings: {...}, timeout_seconds: 30}` (and `tag_values_field` when `tags` is `labels`), plus any sorts and filters the user asked for. Add it to the manifest index. Run `brainctl validate`: it must report no errors (a missing spec or an unregistered command is an error or warning there). Do **not** change any `defaults`, do not make it the default for its type, and do not move items.
+Write the definition with `brainctl impl add --json '{"type": ..., "impl": ..., "fields": {...}, "status_values": {...}, "storage": {"adapter": "script", "command": "python:<name>", "settings": {...}, "timeout_seconds": 30}, "sorts": ..., "filters": ...}'` (add `tag_values_field` to `storage` when `tags` is `labels`). The helper writes `.brain/impls/<type>/<impl>.md`, registers it in the manifest, validates the whole vault and refuses (changing nothing) if that adds an error. Run `brainctl validate` afterwards: it must report no errors (a missing spec or an unregistered command is an error or warning there). Do **not** change any `defaults`, do not make it the default for its type, and do not move items.
 
 ### 6. Verify against the real service (optional; only with approval)
 Only if the user wants it. Ask them to set the environment variables themselves. Confirm a **sandbox** area (a throwaway project or database) and what will be created there. Start read-only by calling the script directly:
@@ -76,7 +76,7 @@ Then, with explicit approval and only in the sandbox, run the conformance kit ag
 ## `change <name>`
 1. Read the spec, the script, its tests and the implementation definition. State the change in terms of the spec.
 2. **Update the spec first** and get approval, then the code, then the tests. Run the whole test file.
-3. A change that alters how stored data maps (field or status mapping, id strategy, `tag_values_field`, `path`-like settings) is a **schema change**: bump the implementation `version`, add a migration note at `.brain/impls/<type>/<impl>.migrations/<from>-to-<to>.md`, and tell the user items already stored will need migrating. Do not change the id strategy of a backend that holds items without a migration plan.
+3. A change that alters how stored data maps (field or status mapping, id strategy, `tag_values_field`, `path`-like settings) is a **schema change**: bump the implementation `version` (`brainctl impl update <type>/<impl> --json '{"bump": true, ...}'`), add a migration note at `.brain/impls/<type>/<impl>.migrations/<from>-to-<to>.md`, and tell the user items already stored will need migrating. Do not change the id strategy of a backend that holds items without a migration plan.
 4. Re-approve the script (its hash changed) and run `brainctl validate`.
 
 ## Done when
