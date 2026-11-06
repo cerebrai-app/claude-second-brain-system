@@ -46,7 +46,7 @@ Summary only; fields, relations, cardinality, status rules and reserved names ar
 | `Note` | Knowledge / reference / captured thought | `title` | `about` → Project/Area/Person (at most one Project or Area), `links` → Note |
 | `Task` | Actionable unit with a state | `title`, `status` (`open`/`done`/`dropped`, plus declared custom values) | `belongs_to` → Project/Area, `assigned_to` → Person, `blocked_by` → Task |
 | `Project` | Outcome with an end state | `title`, `status` (`outcome` optional) | `area` → Area, `owner` → Person |
-| `Area` | Ongoing responsibility, no end date | `title` | `parent` → Area |
+| `Area` | Ongoing responsibility, no end date. **Top-level:** never in the Inbox, never triaged | `title` | `parent` → Area (optional nesting) |
 | `Person` | Someone you interact with. **Top-level:** not placed in any Area or Project, and never in the Inbox | `name` (structured: `given`, `family`, ...) | Named relations to any item (names are chosen by the implementation or the user, e.g. `works_with`, `owner_of`); no required relation |
 | `Archive` | Holds retired objects of any type | `title` | `contains` → any item except Archive |
 
@@ -226,8 +226,8 @@ A second person implementation is allowed **only as a migration target** for mov
 
 The same bulk migration applies to every other core type, where several implementations already coexist; for those the target is simply an additional implementation.
 
-The **Inbox** is a system-created Area (`area:inbox`) that cannot be deleted. Items with no placement relation (Tasks, Notes,
-Projects and Areas; see doc 06) belong to it. **Persons are top-level** and are never placed, so they are never in the Inbox. Because it is an Area, it is just a normal Area item whose `defaults` hold the vault-wide values.
+The **Inbox** is a system-created Area (`area:inbox`) that cannot be deleted. Items with no placement relation (Tasks, Notes
+and Projects; see doc 06) belong to it. **Persons and Areas are top-level** and are never placed, so they are never in the Inbox and never triaged. Because it is an Area, it is just a normal Area item whose `defaults` hold the vault-wide values.
 
 ```markdown
 ---

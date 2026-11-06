@@ -28,7 +28,7 @@ Setup asks **one** question. It shows a summary of what it will create and asks 
 | Vault `name` | The repo directory name. |
 | Storage for every core type | Built-in `markdown` adapter in the brain repo. |
 | Archive adapter | **Built-in `markdown` adapter** in the brain repo, at `archive/{type}/{impl}/{slug}.md` (doc 03). The adapter is fixed at install; this is the only place it is chosen, so the summary states it plainly. A user who wants a `script` adapter edits the summary's choice before confirming; it must report `archive_adapter: true` (doc 03) or setup refuses it. |
-| Inbox `defaults` | One built-in starter implementation per placed core type: `default-task`, `default-note`, `default-project`, `default-area`. (There is no `person` default; see next row.) |
+| Inbox `defaults` | One built-in starter implementation per non-person core type: `default-task`, `default-note`, `default-project`, `default-area`. (There is no `person` default; see next row.) |
 | Person implementation | Exactly one per vault *(Decided)*: `default-person`, `markdown` storage in its own directory, `people/{slug}.md`. |
 | Python workspace | Created at `.brain/python/` with the package manager detected on the machine (`uv`, `poetry`, `pdm`, else `venv` + `pip`), shown in the summary and changeable before confirming (doc 07). Requires Python 3.12 or newer: an existing interpreter is used, otherwise the summary asks approval to fetch one with the user's tool. Optional: skipped, with a message, if none is found and the user declines. POSIX only for now. |
 
@@ -82,11 +82,11 @@ Each core type has one **placement relation**, the relation that puts an item un
 | `Task` | `belongs_to` → Project/Area | |
 | `Note` | `about` → Project/Area/Person | Only the (at most one) Project or Area target counts as placement (doc 08). |
 | `Project` | `area` → Area | |
-| `Area` | `parent` → Area | |
+| `Area` | none | **Top-level** *(Decided)*: an Area is never in the Inbox and is never triaged. `parent` only nests Areas for organization (doc 08); a top-level Area is normal, so an absent `parent` does not mean "unplaced". |
 | `Person` | none | **Top-level** *(Decided)*: a person is not placed in any Area or Project, is never in the Inbox, and is never triaged. Its relations are named relations to any item (doc 01). |
 
 An item is **in the Inbox** when its placement relation is absent or points at `area:inbox`. System items (the Inbox, the Archive) and archived items are never candidates.
-Finding candidates uses `list` per binding of the four placed types (paged) and filters client-side, because the structural `query` can test that a relation is present but not that
+Finding candidates uses `list` per binding of the three placed types (`task`, `note`, `project`) (paged) and filters client-side, because the structural `query` can test that a relation is present but not that
 it is absent (doc 03). The sync seen state (doc 05) can narrow the scan for large vaults.
 
 ## Capture
@@ -96,7 +96,7 @@ it is absent (doc 03). The sync seen state (doc 05) can narrow the scan for larg
 - The type defaults **by input source** *(Decided)*: how the text arrived (for example typed on the command line, piped in, a link or a file) selects the default type through `capture.type_by_source` in `.brain/config.yml`. The built-in default for every source is `note`. `--type task` (and so on) always overrides it. Claude does not infer the type. The implementation is the Inbox `defaults.<type>` (doc 01 resolution, step 3).
 - The item is created with no placement relation, so it is in the Inbox. This fires `create` and `capture` (doc 05).
 - `--trait <name>` (repeatable) attaches traits at creation, for `--type person` only; the trait's required fields are prompted for. A new item otherwise starts with no traits (doc 01).
-- **`--type person` is the exception:** a person is top-level, so it is created with the vault's active person implementation, is not in the Inbox, fires `create` only (no `capture`), and is never offered for triage.
+- **`--type area` and `--type person` are exceptions:** an area or a person is top-level, so it is created with the vault's active person implementation, is not in the Inbox, fires `create` only (no `capture`), and is never offered for triage.
 - Items created outside the plugin that land in the Inbox are detected by sync and fire `capture` as well (`origin: external/...`), but **do not** trigger the inline
   offer below; they simply appear in the triage backlog.
 

@@ -13,7 +13,7 @@
 | `note` | `title` | `about` → Project/Area/Person (at most one Project-or-Area; any number of Persons), `links` → Note |
 | `task` | `title`, `status` (default `open`) | `belongs_to` → Project/Area (0..1, placement), `assigned_to` → Person (any), `blocked_by` → Task (any) |
 | `project` | `title`, `status` (default `open`); `outcome` optional | `area` → Area (0..1, placement), `owner` → Person (0..1); `defaults` (only `task`, `note` keys) |
-| `area` | `title` | `parent` → Area (0..1, placement; cycles are an error); `defaults` (any core type except `person`); `system` (true only for the Inbox) |
+| `area` | `title` | `parent` → Area (0..1, optional nesting, not placement; cycles are an error); `defaults` (any core type except `person`); `system` (true only for the Inbox) |
 | `person` | `name` (structured map) | Named relations to any item; names `[a-z][a-z0-9_]*`, not reserved, not a trait or field name. Undeclared names are allowed. |
 | `archive` | `title` | `contains` (plugin-maintained). Not extensible; one only: `archive:archive`. |
 

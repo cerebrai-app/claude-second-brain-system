@@ -45,7 +45,7 @@ Everything else is defined somewhere else:
 
 - A user edits the vault copy freely; the plugin never overwrites it. A newer starter is applied only by a core migration that the dry run shows (doc 02).
 - To make a variant, copy a starter to a new impl id, change it, bump its `version`, and point the relevant `defaults` at it (doc 01). The person implementation is the exception: it is replaced through a migration target (doc 01).
-- Setup (doc 06) copies all five and sets the Inbox `defaults` for the four placed types to the starters.
+- Setup (doc 06) copies all five and sets the Inbox `defaults` for the four non-person types to the starters.
 
 ## Gaps found while writing the starters
 

@@ -1,7 +1,7 @@
 ---
 name: triage
 description: Walk the Inbox and place each item under an Area and/or Project, converting it to another implementation when the destination calls for it. Use when the user runs /brain:triage or asks to process or sort their inbox.
-argument-hint: "[--type task|note|project|area] [--filter <name>]"
+argument-hint: "[--type task|note|project] [--filter <name>]"
 disable-model-invocation: true
 ---
 
@@ -10,7 +10,7 @@ disable-model-invocation: true
 Read the `core` skill first (placement, defaults, conversion in `storage.md`).
 
 ## Candidates
-Items of types `task`, `note`, `project`, `area` that are in the Inbox: their placement relation is absent or points at `area:inbox`. Never persons, system items (Inbox, Archive) or archived items. List each binding of those types (paged) and filter client-side. Oldest `created` first. `--type` limits to a type; `--filter` limits to items matching a named filter. Report the count first; the user can stop at any time and the rest stay in the Inbox.
+Items of types `task`, `note`, `project` that are in the Inbox: their placement relation is absent or points at `area:inbox`. Never areas or persons, system items (Inbox, Archive) or archived items. List each binding of those types (paged) and filter client-side. Oldest `created` first. `--type` limits to a type; `--filter` limits to items matching a named filter. Report the count first; the user can stop at any time and the rest stay in the Inbox.
 
 ## Per item (one at a time)
 1. **Propose** (read-only): read the item and the Areas and Projects (and their `defaults`) and return an operation list with a short rationale: `set_relation` for the placement relation, optional `set_field` for something clearly implied by the text, and `convert` only if needed. Do not write anything yet.
@@ -19,7 +19,7 @@ Items of types `task`, `note`, `project`, `area` that are in the Inbox: their pl
 4. **Apply** approved operations exactly as shown.
 
 ## Placement relation by type
-`task.belongs_to`, `note.about` (its single Project or Area target), `project.area`, `area.parent`.
+`task.belongs_to`, `note.about` (its single Project or Area target), `project.area`. Areas and persons are top-level and are never triaged.
 
 ## Without conversion
 A single update with the revision you read. On `conflict`, re-read and re-propose.

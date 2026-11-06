@@ -199,7 +199,7 @@ Ongoing responsibility with no end date. Retired by archiving, so it has no `sta
 | Name | Kind | Cardinality | Targets | Notes |
 |---|---|---|---|---|
 | `title` | field | required | | |
-| `parent` | relation | 0 or 1 | Area | The placement relation (doc 06). No cycles (an error), and an Area cannot be its own parent. |
+| `parent` | relation | 0 or 1 | Area | Optional nesting for organization; **not** a placement relation (Areas are top-level, doc 06). No cycles (an error), and an Area cannot be its own parent. |
 | `defaults` | field | optional | map | Any core type except `person` (doc 01). |
 | `system` | field | optional, boolean | | `true` only for the Inbox. System areas cannot be deleted or archived. Not settable by users or rules. |
 
@@ -240,7 +240,7 @@ name:
 - **Stored forward only.** Each relation is stored on the item that owns it; the inverse (a project's tasks) is computed by querying `relations_include` (doc 03), never stored.
 - **Validation.** On write, each target ref must resolve (a dangling ref is reported, not silently dropped, doc 03) and be of an allowed target type; cardinality limits are enforced; a relation to an archived item is a warning, not an error (doc 03).
 - **Implementation relations.** An implementation may add relations to any of the five types beyond the core ones. Each declares a name, a cardinality and its allowed target types (default: any item). Core relation names cannot be redefined.
-- **Triage placement** (doc 06): `Task.belongs_to`, `Note.about` (its single Project/Area target), `Project.area`, `Area.parent`. Persons have none.
+- **Triage placement** (doc 06): `Task.belongs_to`, `Note.about` (its single Project/Area target), `Project.area`. Persons and Areas are top-level and have none.
 
 ### Named relations (Person)
 
