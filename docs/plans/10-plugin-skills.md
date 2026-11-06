@@ -22,8 +22,9 @@ All live in `plugins/brain/skills/<name>/SKILL.md`. A plugin skill is invoked as
 | `run` | `/brain:run` | no | Listing rules and running `manual` rules (doc 05). |
 | `validate` | `/brain:validate` | yes | Vault health checks and repair proposals (docs 06, 07, 08). |
 | `python` | `/brain:python` | yes | The managed Python workspace and the "prefer a script to repetition" rule (doc 07). |
+| `backend` | `/brain:backend` | yes | Specifying, building, testing, binding and changing a storage backend for an outside service (doc 12). |
 
-"Not model-invocable" skills change data or apply approvals, so only the user starts them. `capture`, `sync`, `validate` and `python` may also be started by Claude when the user's request calls for them.
+"Not model-invocable" skills change data or apply approvals, so only the user starts them. `capture`, `sync`, `validate`, `python` and `backend` may also be started by Claude when the user's request calls for them (each has its own approval checkpoints).
 Every command skill begins by reading `core`.
 
 ## Principles
@@ -36,7 +37,7 @@ Every command skill begins by reading `core`.
 
 1. **Migration command.** Doc 02's flow (check on session start, dry run, generated `migrate.py`, apply per step) has no skill yet.
 2. **Session-start behavior.** The design says sync, the migration check and the pending count run at session start; the plugin needs a `SessionStart` hook for that.
-3. **`lib/brain_adapter.py`.** Setup and the `python` skill copy it into the workspace, but the module is not yet in the plugin.
+3. ~~`lib/brain_adapter.py`~~ — superseded: `brainctl.adapter` and `brainctl.conformance` ship in the helper (doc 12).
 4. **System-provided views and rules** (doc 09, gap 2): generic named sorts, filters and rules, and how they are referenced.
 5. **Shipped `README.md` and starter `pyproject.toml`** for the Python workspace (doc 07).
 
@@ -84,13 +85,13 @@ through `/brain:*` itself. The vault commits are the record.
 13. **`.brain/python/lib/` was git-ignored** by the vault's own Python `.gitignore` template (`lib/`). Setup and validate must check, with `git check-ignore`, that every path that should be committed is not ignored, and add a negation (`!.brain/python/lib/`).
 14. Setup appended gitignore lines that were already covered (`.venv`, `__pycache__`); it should skip lines whose effect already holds.
 15. Empty directories (`scripts/`, `lib/`, `tests/`) need a `.gitkeep`.
-16. The workspace `README.md`, `lib/brain_adapter.py` and a session-start hook are still unwritten (see Not yet written).
+16. The workspace `README.md` and a session-start hook are still unwritten (see Not yet written).
 
 ## Next steps
 
 1. Continue `brainctl` (doc 11): `create`, `update`, `archive`, `unarchive`, `delete`, `convert`. The `validate`, `sync` and `core` skills already call it.
 2. Define template variables and formatters for rules (`{{ today }}`, `| checklist`).
 3. Write the migration skill (and the session-start hook).
-4. Write `brain_adapter.py` and the workspace starter files.
+4. Write the workspace starter files.
 5. Specify system-provided views and rules.
 6. Re-run the rehearsal on the scratch vault, with the new slug paths, once `brainctl` can validate and sync. Try the skills end to end against a scratch vault and fix what the rehearsal exposes.

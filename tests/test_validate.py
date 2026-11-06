@@ -449,3 +449,30 @@ def test_an_unquoted_date_slug_or_title_is_read_as_a_date_and_reported(b):
     b.write("notes/2026-11-06.md", "---\nid: 01M6Q8N7BV24V6C5AF3B8Q4R1H\nslug: 2026-11-06\ntype: note\nimpl: default-note\ntitle: 2026-11-06\ncreated: 2026-11-06T00:00:00Z\nupdated: 2026-11-06T00:00:00Z\n---\n")
     found = run(b)
     assert has(found, "slug-type", "warning") and has(found, "title-type", "error")
+
+
+# ---- script (backend) implementations ---------------------------------------------------------------------------------
+
+SCRIPT_IMPL = "---\nimpl: remote\nextends: task\nversion: 1\nstorage:\n  adapter: script\n  command: python:remote\n{extra}---\n"
+
+
+def test_script_impl_must_point_at_a_registered_workspace_script(b):
+    b.write(".brain/impls/task/remote.md", SCRIPT_IMPL.format(extra=""))
+    assert has(run(b), "command-unregistered", "error")
+    b.write(".brain/python/scripts/remote.py", "print(1)\n")
+    b.write(".brain/python/registry.yml", "scripts:\n  - { name: remote, path: scripts/remote.py }\n")
+    assert not has(run(b), "command-unregistered")
+
+
+def test_script_impl_without_a_backend_spec_warns_until_one_exists(b):
+    b.write(".brain/python/scripts/remote.py", "print(1)\n")
+    b.write(".brain/python/registry.yml", "scripts:\n  - { name: remote, path: scripts/remote.py }\n")
+    b.write(".brain/impls/task/remote.md", SCRIPT_IMPL.format(extra=""))
+    assert has(run(b), "backend-spec-missing", "warning")
+    b.write(".brain/backends/remote.md", "# remote backend\n")
+    assert not has(run(b), "backend-spec-missing")
+
+
+def test_script_impl_timeout_must_be_a_positive_integer(b):
+    b.write(".brain/impls/task/remote.md", SCRIPT_IMPL.format(extra="  timeout_seconds: 0\n").replace("  timeout_seconds: 0\n---", "  timeout_seconds: 0\n---"))
+    assert has(run(b), "storage-timeout", "error")

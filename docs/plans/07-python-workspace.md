@@ -104,29 +104,25 @@ dependencies and lock, and is added through the approved dependency flow above. 
 
 ### Adapter base class *(Decided)*
 
-There is **no general helper library** for vault operations. Adapter authors do get one provided class: setup copies a small standard-library-only module, `lib/brain_adapter.py`, from the plugin into the
-workspace (copied, not linked, so the vault owns it like the starter definitions in doc 01; core migrations update it when the storage contract changes). A `script` adapter subclasses it and implements the contract
-operations; the base class handles the process boundary:
+There is **no general helper library** for vault operations. Adapter authors do get one provided class, `brainctl.adapter.BrainAdapter`, shipped inside the `brainctl` package that setup copies into `.brain/python/brainctl/` (so it is plugin code, updated by core migrations, and not part of a script's approval hash). A `script` adapter subclasses it, sets class attributes that describe the backend, implements the operations it supports, and ends with `MyBackend.run()`; the base class handles the process boundary:
 
 ```python
-from brain_adapter import BrainAdapter, NotFound, Conflict, RateLimited
+from brainctl.adapter import BrainAdapter, NotFound, Conflict, RateLimited
 
 class MyBackend(BrainAdapter):
-    def describe(self): ...                # capabilities and settings schema (doc 03)
-    def create(self, envelope): ...        # returns the envelope, with native_id if any
-    def read(self, ref): ...
-    def update(self, envelope): ...        # raise Conflict on a revision mismatch
-    def list(self, query, limit, cursor): ...
-    def resolve(self, ref): ...
-    def archive(self, ref, revision): ...  # plus unarchive and delete where supported
+    name = "my-backend"
+    requires_env = ["MY_TOKEN"]
+    tags = "labels"
+    def read(self, ref, native_id=None): ...        # return an envelope or raise NotFound
+    def update(self, envelope, **kw): ...           # raise Conflict on a revision mismatch
+    def list(self, query=None, limit=None, cursor=None): ...
 
 if __name__ == "__main__":
-    MyBackend().main()                     # reads the operation JSON from stdin, writes the result JSON to stdout
+    MyBackend.run()                                 # one JSON request on stdin, one JSON response on stdout
 ```
 
-- `main()` parses the request, dispatches to the method for the operation, and serializes the result or the error. Exceptions map to the doc 03 error codes (`NotFound`, `Conflict`, `Invalid`,
-  `Unauthorized`, `RateLimited`, `Unavailable`, `Unsupported`, anything else becomes `internal`).
-- Operations a backend does not support raise `Unsupported`; the base class implements `describe` defaults and rejects unknown operations.
+- It maps `AdapterError` subclasses to the doc 03 error codes (`NotFound`, `Conflict`, `Invalid`, `Unauthorized`, `RateLimited`, `Unavailable`, `Unsupported`; anything else becomes `internal` with the traceback on stderr), checks arguments, and builds `describe` from the class attributes.
+- `brainctl.conformance` checks an adapter against the contract. The workflow for specifying, building and testing a backend is doc 12 and the `/brain:backend` skill.
 - It is a convenience, not a requirement: any executable that follows the doc 03 protocol is still a valid adapter.
 
 ### Access to vault data: unrestricted *(Decided)*
@@ -181,6 +177,6 @@ The workspace `README.md` (created at setup, owned by the vault) tells agents th
 
 ## Next steps
 
-1. Define the shipped `README.md` for agents, the starter `pyproject.toml`, and the `brain_adapter.py` module (exact method signatures and the error classes).
+1. Define the shipped `README.md` for agents and the starter `pyproject.toml`. (`brain_adapter.py` is superseded by `brainctl.adapter`, doc 12.)
 2. Specify the `python:` command form in docs 03 and 05 precisely (parsing, errors for unknown or unapproved scripts).
 3. Specify how the tools map to the four abstract operations (init, add, sync, run), including the interpreter-fetch step per tool.

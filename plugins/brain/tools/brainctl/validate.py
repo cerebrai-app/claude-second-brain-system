@@ -98,7 +98,7 @@ def _check_definitions(vault, f):
             f.error("impl-extends", subject, f"`extends` is {impl.extends!r} but the definition is in .brain/impls/{type_}/")
         if not isinstance(impl.version, int):
             f.error("impl-version", subject, "`version` must be an integer")
-        _check_storage(impl, f)
+        _check_storage(vault, impl, f)
         for field_name, spec in impl.fields.items():
             for code, message in schema.check_spec(field_name, spec):
                 f.error(code, subject, message)
@@ -128,7 +128,7 @@ def _check_definitions(vault, f):
         f.warn("person-impl", ".brain/impls/person", "no person implementation is defined")
 
 
-def _check_storage(impl, f):
+def _check_storage(vault, impl, f):
     subject = impl.relpath
     adapter = impl.adapter
     if adapter == "markdown":
@@ -142,8 +142,18 @@ def _check_storage(impl, f):
             if not template.endswith(".md"):
                 f.warn("storage-path", subject, "the path template should end with .md")
     elif adapter == "script":
-        if not impl.storage.get("command"):
+        command = impl.storage.get("command")
+        if not command:
             f.error("storage-command", subject, "script storage needs a command")
+        elif isinstance(command, str) and command.startswith("python:"):
+            registry = _load_registry(vault)
+            if registry is None or command[len("python:"):] not in registry:
+                f.error("command-unregistered", subject, f"{command} is not a script in the Python workspace registry")
+        timeout = impl.storage.get("timeout_seconds")
+        if timeout is not None and (not isinstance(timeout, int) or isinstance(timeout, bool) or timeout < 1):
+            f.error("storage-timeout", subject, "timeout_seconds must be a positive integer")
+        if not os.path.isfile(vault.path(f".brain/backends/{impl.name}.md")):
+            f.warn("backend-spec-missing", subject, f"no backend spec at .brain/backends/{impl.name}.md (run /brain:backend to write one)")
     else:
         f.error("storage-adapter", subject, f"unknown storage adapter {adapter!r}")
 

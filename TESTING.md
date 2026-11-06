@@ -35,7 +35,7 @@ pytest tests/test_validate.py -k cycle
 pytest -x -q                          # stop at the first failure, quiet
 ```
 
-Expect all tests to pass (about 230, a few seconds). `pytest.ini` sets `testpaths = tests` and registers the `workspace` marker. The helper is imported from `plugins/brain/tools/` by `tests/conftest.py`, so nothing needs installing.
+Expect all tests to pass (about 250, a few seconds). `pytest.ini` sets `testpaths = tests` and registers the `workspace` marker. The helper is imported from `plugins/brain/tools/` by `tests/conftest.py`, so nothing needs installing.
 
 ## What is covered
 
@@ -47,6 +47,7 @@ Expect all tests to pass (about 230, a few seconds). `pytest.ini` sets `testpath
 | `tests/test_validate.py` | One test per `brainctl validate` check: vault files and manifest, definitions, traits, items (required fields, status and `completed`, tags, person names, defaults), relations (targets, cardinality, dangling, archived, cycles), duplicates across bindings, half-converted markers, **ignored paths** (the `lib/` bug), the Python workspace and script approval states, and automation (schedule, pinned sorts, undefined filters, `place`, vault rule `requires`). |
 | `tests/test_sync.py` | The silent baseline, quiet second sync, `create`/`capture` rules (areas and persons never fire `capture`), `update` with `changed`, relation events, missing items, archive/unarchive, **conversion as one update with `impl` changed**, an interrupted conversion, **adoption** of hand-written files (additive, keeps name, body and key order; fills status and defaults; refuses invalid or ambiguous files), invalid external changes held back until fixed, `--dry-run`, `--refresh`, and script bindings reported incomplete. |
 | `tests/test_cli.py` | Exit codes (0 clean, 1 findings, 2 usage), JSON and `--text` output, `list`, `read`, `id`, `slug`, `approve-hash`, and the **installed layout**: a copy of the package in `.brain/python/brainctl/` run as `python -m brainctl` from `.brain/python`, as the skills do. |
+| `tests/test_adapter.py` | `BrainAdapter` (dispatch, error mapping, missing arguments are `invalid`, unknown arguments ignored, `main()` as a real process), its helpers, **the reference adapter passing the conformance kit**, and the kit **catching deliberately broken adapters** (ignored revisions, lost tags, listing that drops items, missing `not_found`, delete without confirmation, crashes, bad `describe`, non-JSON results). |
 | `tests/test_approval.py` | The approval hash recipe (sorted paths, `path NUL bytes NUL`), and that the script, `lib/**/*.py` and `pyproject.toml` change it while other files do not. |
 | `tests/test_static.py` | Skill front matter is valid YAML (a colon in an unquoted description once broke one), names match directories, the right skills are user-only, starters hold **only** file storage semantics with a `{slug}` path, referenced files exist. |
 | `tests/test_scenario.py` | The mechanical rehearsal end to end: the Python-template `.gitignore` bug and its negation fix; slugs, collisions and a date-named journal note; capture, triage placements, a conversion with a half-converted marker, hand-written file adoption and sync. The `workspace` test builds a real `uv` workspace and runs a script with a scrubbed environment. |

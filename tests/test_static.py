@@ -1,6 +1,7 @@
 """Static checks on the plugin's skills and starters (formerly tests/check_static.py)."""
 import glob
 import os
+import re
 
 import pytest
 
@@ -20,7 +21,7 @@ def front(path):
 
 def test_the_expected_skills_exist():
     names = {os.path.basename(os.path.dirname(p)) for p in SKILLS}
-    assert names == {"core", "setup", "capture", "triage", "sync", "pending", "run", "validate", "python"}
+    assert names == {"core", "setup", "capture", "triage", "sync", "pending", "run", "validate", "python", "backend"}
 
 
 @pytest.mark.parametrize("path", SKILLS, ids=lambda p: os.path.basename(os.path.dirname(p)))
@@ -50,3 +51,12 @@ def test_there_is_one_starter_per_extensible_type():
 def test_the_references_the_skills_point_at_exist():
     for ref in ("core-types.md", "storage.md", "automation.md"):
         assert os.path.isfile(f"{REPO}/plugins/brain/skills/core/references/{ref}")
+    for ref in ("adapter-protocol.md", "spec-template.md", "adapter-template.py", "test-template.py"):
+        assert os.path.isfile(f"{REPO}/plugins/brain/skills/backend/references/{ref}")
+
+
+def test_relative_links_in_skills_resolve():
+    link = re.compile(r"\]\((references/[^)#]+)\)")
+    for path in SKILLS:
+        for target in link.findall(open(path, encoding="utf-8").read()):
+            assert os.path.exists(os.path.join(os.path.dirname(path), target)), f"{path}: broken link {target}"

@@ -119,7 +119,7 @@ For Linear, Trello, or anything else. The binding points at an executable, or `p
 ```yaml
 storage:
   adapter: script
-  run: ".brain/adapters/linear-task"        # executable, relative to the brain repo
+  command: "python:linear-task"             # python:<name> (a registered workspace script) or an executable path relative to the brain repo
   settings: { team: ENG, project: Q4 }      # passed through to the script
   timeout_seconds: 30
 ```
@@ -154,6 +154,7 @@ Error (exit code non-zero **or** `ok: false`):
 - **Trust:** scripts execute on the user's machine with their privileges. They live in the user's brain repo and are the
   user's responsibility; the plugin shows the command before the first run of a new or changed script and does not run it
   without that confirmation.
+- **Writing one:** `brainctl.adapter.BrainAdapter` implements this process boundary and `brainctl.conformance` checks an adapter against this contract; the `/brain:backend` skill and doc 12 describe the workflow. `archive` and `unarchive` are optional on an adapter.
 - **Testing:** `list` and `read` are used by the migration sampler (doc 02), and an adapter must also be usable through a
   **fixture adapter** that serves a `sample.json` of envelopes, so a script's logic can be tested without the real system.
 

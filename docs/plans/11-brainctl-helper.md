@@ -97,7 +97,7 @@ capture:
 
 ## Package layout and tests
 
-The helper is the package `plugins/brain/tools/brainctl/` (`__main__.py` CLI, `model.py` vault and scanning, `schema.py` field types, `validate.py`, `sync.py`, `approval.py`, `ids.py`, `util.py`). Setup copies the package without tests or caches. Its tests are pytest tests in `tests/` (see `TESTING.md`): unit tests for ids, schema, scanning and the approval hash; one test per `validate` check; sync tests for baseline, events, adoption, conversions and refresh; CLI tests including the installed-copy layout.
+The helper is the package `plugins/brain/tools/brainctl/` (`__main__.py` CLI, `model.py` vault and scanning, `schema.py` field types, `validate.py`, `sync.py`, `approval.py`, `ids.py`, `util.py`, and for backend authors `adapter.py` and `conformance.py`, doc 12). Setup copies the package without tests or caches. Its tests are pytest tests in `tests/` (see `TESTING.md`): unit tests for ids, schema, scanning and the approval hash; one test per `validate` check; sync tests for baseline, events, adoption, conversions and refresh; CLI tests including the installed-copy layout.
 
 ## Implementation order
 
