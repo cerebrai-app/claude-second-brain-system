@@ -19,7 +19,7 @@ Detail lives in the reference files next to this skill. Read the one you need be
 
 1. **Identify items by ref** `<type>:<id>` (for example `task:01JABC...`). The `id` is a ULID the plugin assigns and never changes, and it is independent of the implementation and the file path.
 2. **Respect the five core types** (`note`, `task`, `project`, `area`, `person`) plus the non-extensible `archive`. An item's `type` never changes; only its implementation (`impl`) can.
-3. **Validate before you write.** Check required fields, field types and constraints from the item's implementation definition (`.brain/impls/<type>/<impl>.md`), relation targets and cardinality, and reserved names. Refuse and explain rather than writing an invalid item.
+3. **Item files are written only through `brainctl`** (`create`, `update`, `archive`, `unarchive`, `delete`, `convert`, `op`). The helper validates against the schema, rolls back an invalid write, assigns ids, slugs and timestamps, keeps unknown front matter and key order, moves files, and updates the sync seen state. Do not edit item files by hand. Refuse and explain when the helper reports `invalid`.
 4. **Do not invent.** Leave optional fields empty rather than guessing (dates, priorities, family names, outcomes). Do not add tags, traits, relations or fields the user did not ask for.
 5. **Placement and the Inbox.** An item with no placement relation (`task.belongs_to`, `note.about` Project/Area, `project.area`) is in the Inbox (`area:inbox`). Persons and Areas are top-level: never placed, never in the Inbox, never triaged (`area.parent` only nests areas).
 6. **Archive instead of delete.** To remove an item, archive it. Permanent delete is an exception: confirm with the user first, and never from automation. The Inbox and the Archive cannot be archived or deleted.
@@ -27,7 +27,7 @@ Detail lives in the reference files next to this skill. Read the one you need be
 8. **Keep derived state out of git.** `.brain/index/`, `.brain/cache/`, `.brain/automation/seen|pending|log.jsonl`, `.brain/conversions/`, `.brain/python/.venv/` are ignored; never commit them.
 9. **Do not commit unless the user asks** (setup and triage offer a commit at the end).
 10. **Ids, slugs, dates and templates come from the helper, never from you.** Timestamps (`created`, `updated`, `completed`) are `brainctl render "{{ now }}"`, and today's date is `brainctl render "{{ today }}"` (the vault's time zone); never write them from memory. Follow [references/ids-and-slugs.md](references/ids-and-slugs.md); a slug's source is in the Slug section of the implementation's definition (`.brain/impls/<type>/<impl>.md`).
-11. **Keep derived state in step after every write** until `brainctl` has `create`/`update`: refresh `updated` and `completed` when a task or project's status category changes (timestamps from `brainctl render "{{ now }}"`), then run `brainctl sync --refresh` so the sync seen state accepts your own write. Forgetting it makes the next sync report your edit as an outside change.
+11. **Never run `sync --refresh` after a `brainctl` write**: the write commands update the seen state themselves, so your own writes do not show as outside changes. Run `sync --refresh` only after you changed something some other way (a user-approved hand edit, say).
 12. **Check your work with `brainctl validate`** after changes that touch several items, and before offering a commit.
 
 ## Running `brainctl`
@@ -42,9 +42,13 @@ Detail lives in the reference files next to this skill. Read the one you need be
 | `list`, `read <ref>` | Items across bindings and the Archive. |
 | `render <template>` / `render --json <value>` | Resolve rule templates (`{{ today }}`, `{{ now }}`, bound lists with filters). Never resolve them yourself. |
 | `id [-n N]`, `slug <title> [--dir D]` | New ULIDs and unique slugs (the latter as the implementation's Slug section directs). |
-| `approve-hash <script>` | The workspace approval hash. |
+| `create`, `update <ref>`, `archive <ref>`, `unarchive <ref>`, `delete <ref> --confirm permanent`, `convert plan\|apply\|finish <ref> --to <impl>` | The only way to write items. Input is JSON given as `--json '<json>'`, `--json @file` or `--json -` (stdin is never read otherwise). Output is JSON; exit 1 with `{ok: false, error: {code, message}}` for `invalid`, `conflict`, `not_found`, `unsupported`, `internal`. See `references/storage.md`. |
+| `op --json '<operation>'` | Apply one rule operation (`set_field`, `set_relation`, `add_relation`, `archive`, `unarchive`, `create_item`). |
+| `pending add\|list\|apply <id>\|reject <id>` | The pending-approval queue (automation reference). |
+| `log --json '<line>'` | Append a rule-run line to the automation log. |
+| `approve-hash <script>`, `approve <script>\|--all --by <user>` | Workspace script approval. |
 
-Not available yet: `create`, `update`, `archive`, `unarchive`, `delete`, `convert`. Until they exist, write item files by hand following these rules, then `sync --refresh` and `validate`. Script-adapter bindings are not read yet; `sync` and `validate` report them as incomplete/skipped.
+Script-adapter bindings are read by `sync` and `validate` but not written by the write commands yet (they answer `unsupported`).
 
 ## Defaults for new items
 

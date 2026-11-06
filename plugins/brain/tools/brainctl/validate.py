@@ -4,7 +4,7 @@ import os
 import re
 
 from . import CORE_VERSION, approval, model, schema, templates, util
-from .model import (ALL_CORE_RELATIONS, CORE_RELATIONS, CORE_STATUS, CORE_TYPES, ENVELOPE_KEYS, NAME_RE, REF_RE, RESERVED,
+from .model import (ALL_CORE_RELATIONS, CORE_RELATIONS, CORE_STATUS, CORE_TYPES, ENVELOPE_KEYS, LOG_OUTCOMES, NAME_RE, REF_RE, RESERVED,
                     STATUS_TYPES, ULID_RE)
 
 TRIGGERS = {"create", "update", "capture", "archive", "unarchive", "relation", "before_delete", "manual"}
@@ -680,7 +680,6 @@ def _check_conversions(vault, f):
         f.warn("half-converted", subject, f"the conversion of {ref or 'an item'} did not finish; finish it to remove the duplicate item")
 
 
-LOG_OUTCOMES = ("ok", "skipped", "queued", "approved-applied", "rejected", "expired", "failed")
 LOG_TAIL = 200
 
 

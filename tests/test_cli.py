@@ -170,3 +170,64 @@ def test_find_skips_archived_items_unless_asked(b):
     b.write("archive/note/default-note/old.md", "---\nid: 01J0000000000000000000000Z\nslug: old\ntype: note\nimpl: default-note\ntitle: Old\narchive: archive:archive\narchived_at: 2026-11-01T10:00:00Z\ncreated: 2026-11-01T10:00:00Z\nupdated: 2026-11-01T10:00:00Z\n---\n")
     assert run_cli(b, "find", "--type", "note", "--where", "title=Old")[0] == 1
     assert run_cli(b, "find", "--type", "note", "--where", "title=Old", "--include-archived")[0] == 0
+
+
+def _run(b, capsys, *argv):
+    code = cli.main(["--vault", b.root, *argv])
+    out = capsys.readouterr().out
+    return code, (json.loads(out) if out.strip().startswith("{") else out)
+
+
+def test_write_commands_end_to_end(b, capsys):
+    code, made = _run(b, capsys, "create", "--json", json.dumps({"type": "note", "title": "Hello there", "body": "hi\n"}))
+    assert code == 0 and made["path"] == "notes/hello-there.md"
+    ref = made["ref"]
+    code, upd = _run(b, capsys, "update", ref, "--json", json.dumps({"set": {"tags": {"x": "1"}}, "revision": made["revision"]}))
+    assert code == 0 and upd["changed"] == ["tags"]
+    code, bad = _run(b, capsys, "update", ref, "--json", json.dumps({"set": {"slug": "nope"}}))
+    assert code == 1 and bad["ok"] is False and bad["error"]["code"] == "invalid"
+    code, stale = _run(b, capsys, "update", ref, "--json", json.dumps({"set": {"title": "Z"}, "revision": made["revision"]}))
+    assert code == 1 and stale["error"]["code"] == "conflict"
+    code, arch = _run(b, capsys, "archive", ref)
+    assert code == 0 and arch["path"].startswith("archive/")
+    code, _ = _run(b, capsys, "unarchive", ref)
+    assert code == 0
+    code, refused = _run(b, capsys, "delete", ref)
+    assert code == 1 and refused["error"]["code"] == "invalid"
+    code, gone = _run(b, capsys, "delete", ref, "--confirm", "permanent")
+    assert code == 0 and gone["ref"] == ref
+    code, missing = _run(b, capsys, "archive", ref)
+    assert code == 1 and missing["error"]["code"] == "not_found"
+    assert cli.main(["--vault", b.root, "validate"]) == 0
+
+
+def test_op_log_and_pending_commands(b, capsys):
+    code, note = _run(b, capsys, "create", "--json", json.dumps({"type": "note", "title": "N"}))
+    code, _ = _run(b, capsys, "op", "--json", json.dumps({"op": "set_field", "ref": note["ref"], "field": "tags", "value": {"a": "b"}}))
+    assert code == 0
+    code, _ = _run(b, capsys, "log", "--json", json.dumps({"rule": "vault/r", "outcome": "skipped", "reason": "exists"}))
+    assert code == 0
+    code, bad = _run(b, capsys, "log", "--json", json.dumps({"outcome": "nonsense"}))
+    assert code == 1 and bad["error"]["code"] == "invalid"
+    proposal = {"rule": "note/default-note/r", "event": {"id": "ev_1", "trigger": "capture", "ref": note["ref"]}, "rationale": "because",
+                "operations": [{"op": "set_field", "ref": note["ref"], "field": "tags", "value": {"c": "d"}}]}
+    code, added = _run(b, capsys, "pending", "add", "--json", json.dumps(proposal))
+    assert code == 0
+    code, listed = _run(b, capsys, "pending", "list")
+    assert listed["count"] == 1 and listed["entries"][0]["state"] == "fresh"
+    code, applied = _run(b, capsys, "pending", "apply", added["id"])
+    assert code == 0 and applied["applied"] == 1
+    assert _run(b, capsys, "pending", "apply")[0] == 2
+    assert cli.main(["--vault", b.root, "validate"]) == 0
+    capsys.readouterr()
+
+
+def test_convert_commands(b, capsys):
+    b.impl("task", "gtd", fields="    context: { type: enum, values: [work, home], required: true }\n", path="tasks/gtd/{slug}.md")
+    code, made = _run(b, capsys, "create", "--json", json.dumps({"type": "task", "title": "Plan"}))
+    code, plan = _run(b, capsys, "convert", "plan", made["ref"], "--to", "gtd")
+    assert code == 0 and plan["needs_resolution"]
+    code, refused = _run(b, capsys, "convert", "apply", made["ref"], "--to", "gtd", "--json", "{}")
+    assert code == 1 and refused["error"]["code"] == "invalid"
+    code, done = _run(b, capsys, "convert", "apply", made["ref"], "--to", "gtd", "--json", json.dumps({"fill": {"context": "work"}}))
+    assert code == 0 and done["path"] == "tasks/gtd/plan.md"

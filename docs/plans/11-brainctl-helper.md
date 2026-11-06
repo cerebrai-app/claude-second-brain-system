@@ -1,6 +1,6 @@
 # 11 — The `brainctl` Helper
 
-Status: **Draft, partly implemented** (`validate`, `sync`, `read`, `list`, `id`, `slug`, `approve-hash`, `approve`, `render`; version 0.2.2) · Depends on: [03](03-storage-contract.md), [05](05-automation.md), [07](07-python-workspace.md), [08](08-core-types.md) · Origin: the first rehearsal ([10](10-plugin-skills.md), findings 1 and 2)
+Status: **Draft, partly implemented** (`validate`, `sync`, `read`, `list`, `id`, `slug`, `approve-hash`, `approve`, `render`, `create`, `update`, `archive`, `unarchive`, `delete`, `convert`, `op`, `pending`, `log`; version 0.3.0) · Depends on: [03](03-storage-contract.md), [05](05-automation.md), [07](07-python-workspace.md), [08](08-core-types.md) · Origin: the first rehearsal ([10](10-plugin-skills.md), findings 1 and 2)
 
 ## Goal
 
@@ -24,17 +24,20 @@ adopting hand-written files, hashing a script for approval. In the rehearsal, do
 |---|---|
 | `id [-n N]` | New ULID(s). (`ids.py`, shipped now.) |
 | `slug <title> [--dir D]` | A unique slug for the title (doc 08, Slug). (`ids.py`, shipped now.) |
-| `create` | Take an envelope, assign `id`, `created`, `updated` and, when the implementation declares a `slug` field, `slug` (doc 08), apply schema defaults, validate, write through the binding's adapter, then update the seen state, refs index and id index and append to the log. Returns the stored envelope. |
+| `create --json` | `{type, impl?, title or name, body?, tags?, fields, relations}`. Picks `impl` by the defaults cascade when absent (Project, Area, Inbox; a person: the active person implementation), assigns `id`, `slug` (when declared), `created`, `updated`, schema defaults, `status: open` and `completed`, normalises tags and relations, validates, writes atomically, then updates the seen state for that ref and appends to the log. Rolls back and answers `invalid` (with the findings) when the result does not validate. Returns the stored item and its `revision`. Markdown bindings only; a script binding answers `unsupported`. |
 | `read <ref>` / `list` | Read an item, or list items by structural query, across bindings and the Archive. `list` keys results by ref **and** binding, so a duplicate ref is visible. |
-| `update` | Full replace with the `revision` read. Sets `updated` and `completed` (doc 08), validates, writes atomically, moves the file when the rendered path changes, refreshes derived state. `conflict` if the revision differs. |
-| `archive <ref>` / `unarchive <ref>` | Doc 03, with ordering and failure handling; refreshes derived state. |
-| `delete <ref> --confirm permanent` | Permanent delete. Refuses without the flag. Runs no rules (rules are the skill's job). |
-| `convert plan <ref> --to <impl>` | The deterministic mapping and report (carried, unmapped, invalid, missing, filled by default), as JSON. |
-| `convert apply <ref> --to <impl>` | With the user's resolutions on stdin: validate, create in the target with the same id, record the native id, delete the source, refresh derived state, and write or clear the half-converted marker. |
-| `validate [--ref R]` | Every mechanical check in the `validate` skill: manifest and config, definitions, items, relations, duplicates across bindings, unadopted files, leftover markers, ignored-path checks, workspace approvals. JSON findings with severity. |
+| `update <ref> --json` | `{set, unset, body?, revision?}` (a patch, not a full replace: the skills turn `set_field` and `set_relation` into it). Edits only the lines of the changed keys, so comments, unknown keys and key order survive; sets `updated`; keeps `completed` in step with the status category (doc 08); moves the file when the rendered path changes; validates and rolls back on failure. `conflict` if `revision` differs. `id`, `type`, `impl`, `slug`, `created` and the other plugin-maintained keys cannot be set. A change that alters nothing writes nothing. |
+| `archive <ref>` / `unarchive <ref>` | Move to and from the Archive path (an item with no `slug` is named by its `id`), setting or clearing `archive` and `archived_at`. The Inbox and other system items refuse. If the old file cannot be removed the error says the item now exists twice. |
+| `delete <ref> --confirm permanent` | Permanent delete; refuses without the flag and for system items. Reports `referenced_by`. Runs no rules. |
+| `convert plan <ref> --to <impl>` | The deterministic mapping and report as JSON: `carried`, `unmapped`, `invalid`, `missing`, `filled_by_default`, `dropped` (the slug, when the target declares none), `needs_resolution`. |
+| `convert apply <ref> --to <impl> --json` | Resolutions `{drop, rename, fill}`; refuses until every unmapped, invalid and missing field is resolved. Creates in the target with the same id, deletes the source, updates the seen state, and writes the half-converted marker (shape below) if the source delete fails. `convert finish <ref>` completes an interrupted conversion from its marker. |
+| `validate [--ref R]` | Every mechanical check in the `validate` skill: manifest and config, definitions, items, relations, duplicates across bindings, unadopted files, leftover markers, ignored-path checks, workspace approvals, rule templates, the automation log. JSON findings with severity. |
 | `find` | `--type`, `--impl`, repeatable `--where field=value` (dotted paths), `--include-archived`. Items whose fields equal the values; exit 1 when none match. The deterministic lookup behind `unless_exists` (doc 05). |
 | `sync` | Detect: scan all bindings and the Archive, match by ref across bindings, diff against the seen state, **adopt** hand-written files and **complete** the identity fields (slug, title, status, created, updated) of items that have an id but lack them (doc 05), and return the sync report and ordered event list. Updates the seen state, except for externally changed items that fail validation (held back so they are reported again). `--no-adopt` reports without editing files; `--dry-run` writes nothing; `--refresh` accepts the current state as seen (no events, no adoption), for use after the plugin's own writes. Script-adapter bindings are read through `client.py` (doc 12, Client); one that cannot be read is reported as incomplete and its items are never reported as missing. The one-minute `rate_limited` retry applies to script calls. |
 | `render <template> [--vars JSON] [--var N=V] [--now ISO]` / `render --json <value>` | Resolve `{{ today }}`, `{{ now }}` and bound variables with the filters `checklist`, `bullets`, `refs`, `table` (doc 05, Template variables). `--json` resolves every string in a JSON value. Exit 2 on an unknown variable or filter. `templates.py`; `validate` uses the same parser (`rule-template`). |
+| `op --json` | One rule operation: `set_field`, `set_relation`, `add_relation`, `archive`, `unarchive`, `create_item`. Built-in actions, hooks and approved proposals all reduce to these; `convert` and `notify` are not handled here. |
+| `pending add --json` / `list [--prune]` / `apply <id> [--json {operations}]` / `reject <id>` | The pending-approval queue (doc 05). `add` takes `{rule, event, instruction, rationale, operations}` and fills `id`, `status`, `created`, `expires` and `revision`. `list` marks each entry `fresh`, `stale` (the item changed or is gone) or `expired`; `--prune` drops expired ones. `apply` acts on the user's approval and refuses anything but a fresh entry. |
+| `log --json` | Append a rule-run line; checks the outcome vocabulary (doc 05). |
 | `approve-hash <script>` | The workspace approval hash (below). |
 | `approve <script> \| --all --by WHO` | Record the current hash as the approval in `registry.yml` (`approved: {sha256, at, by}`), keeping the file's comments. `--all` covers every script that is unapproved or changed. The skill shows the user the diff first; the command only records the answer. `--by` is required and names the person who approved (their name or email); the helper refuses to guess it from the git identity, which may be a tool's. |
 | `index rebuild` | Rebuild the derived refs index by scanning frontmatter ids. |
@@ -47,7 +50,7 @@ Proposals and judgment (triage placement, `claude` actions, `when` conditions, e
 
 ### Rule for the skills
 
-**Item files are written only through `brainctl`.** The `core` skill states this. A hand edit by the user is normal; sync picks it up.
+**Item files are written only through `brainctl`.** The `core` skill states this. Input is JSON given as `--json '<json>'`, `--json @file` or `--json -`; stdin is never read implicitly, so a command cannot hang on an open pipe. Output is JSON; exit 0 on success, 1 with `{ok: false, error: {code, message}}` for a storage error (`invalid`, `conflict`, `not_found`, `unsupported`, `internal`), 2 for bad usage. A hand edit by the user is normal; sync picks it up.
 
 ## Approval hash *(Decided)*
 
@@ -93,7 +96,7 @@ capture:
 
 ## Package layout and tests
 
-The helper is the package `plugins/brain/tools/brainctl/` (`__main__.py` CLI, `model.py` vault and scanning, `schema.py` field types, `validate.py`, `sync.py`, `approval.py`, `templates.py`, `ids.py`, `util.py`, `client.py` (runs script adapters), and for backend authors `adapter.py` and `conformance.py`, doc 12). Setup copies the package without tests or caches. Its tests are pytest tests in `tests/` (see `TESTING.md`): unit tests for ids, schema, scanning and the approval hash; one test per `validate` check; sync tests for baseline, events, adoption, conversions and refresh; CLI tests including the installed-copy layout.
+The helper is the package `plugins/brain/tools/brainctl/` (`__main__.py` CLI, `model.py` vault and scanning, `schema.py` field types, `validate.py`, `sync.py`, `approval.py`, `templates.py`, `store.py` (the markdown writes), `pending.py` (operations, queue, log), `ids.py`, `util.py`, `client.py` (runs script adapters), and for backend authors `adapter.py` and `conformance.py`, doc 12). Setup copies the package without tests or caches. Its tests are pytest tests in `tests/` (see `TESTING.md`): unit tests for ids, schema, scanning and the approval hash; one test per `validate` check; sync tests for baseline, events, adoption, conversions and refresh; CLI tests including the installed-copy layout.
 
 ## Implementation order
 

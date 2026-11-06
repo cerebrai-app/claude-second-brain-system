@@ -8,6 +8,7 @@ from . import util
 CORE_TYPES = ("note", "task", "project", "area", "person")
 STATUS_TYPES = ("task", "project")
 CORE_STATUS = ("open", "done", "dropped")
+LOG_OUTCOMES = ("ok", "skipped", "queued", "approved-applied", "rejected", "expired", "failed")
 PLACEMENT = {"task": "belongs_to", "note": "about", "project": "area"}  # areas and persons are top-level
 PLACED_TARGETS = {"task": ("project", "area"), "note": ("project", "area"), "project": ("area",)}
 

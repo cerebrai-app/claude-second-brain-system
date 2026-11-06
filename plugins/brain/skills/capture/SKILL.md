@@ -18,4 +18,4 @@ Read the `core` skill first.
 ## Then offer triage
 After the `capture` rules for that event have run, ask: *Triage now?* with a placement proposal for this item (the `triage` skill's proposal step). *Later* leaves it in the Inbox for `/brain:triage`. Do not offer for areas, persons or for items detected by sync.
 
-Confirm what was created (ref and path). Do not commit unless asked.
+Create it with `brainctl create --json '{"type": ..., "title": ..., "body": ...}'` (omit `impl` to get the defaults cascade; for a person pass `name` and `traits`/trait fields). The helper assigns the id, slug and timestamps. Confirm what was created (ref and path). Do not commit unless asked.

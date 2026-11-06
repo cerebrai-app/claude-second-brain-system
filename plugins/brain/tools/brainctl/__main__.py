@@ -4,7 +4,7 @@ import json
 import os
 import sys
 
-from . import __version__, approval, client as client_mod, ids, sync as sync_mod, templates, util, validate as validate_mod
+from . import __version__, approval, client as client_mod, ids, pending as pending_mod, store, sync as sync_mod, templates, util, validate as validate_mod
 from .model import Vault
 
 EXIT_OK, EXIT_FINDINGS, EXIT_USAGE = 0, 1, 2
@@ -201,6 +201,90 @@ def cmd_render(args):
     return EXIT_OK
 
 
+def _json_input(args):
+    """The command's JSON argument: --json '<json>', --json @FILE, or --json - for stdin. Nothing is read from stdin unless asked, so a
+    command run from a shell with an open pipe cannot hang. {} when there is no input."""
+    text = args.json
+    if text == "-":
+        text = sys.stdin.read()
+    elif text and text.startswith("@"):
+        with open(text[1:], encoding="utf-8") as fh:
+            text = fh.read()
+    if not text or not text.strip():
+        return {}
+    value = json.loads(text)
+    if not isinstance(value, (dict, list)):
+        raise ValueError("the JSON input must be an object")
+    return value
+
+
+def _store_command(args, fn):
+    """Run a write command: print its JSON result (exit 0), or {ok: false, error} and exit 1 for a storage error, 2 for bad input."""
+    vault = _vault(args)
+    try:
+        result = fn(vault)
+    except store.StoreError as err:
+        print(util.dumps({"ok": False, "error": err.to_dict()}))
+        return EXIT_FINDINGS
+    except (ValueError, KeyError, OSError) as exc:
+        print(util.dumps({"ok": False, "error": {"code": "invalid", "message": f"bad input: {exc}"}}))
+        return EXIT_USAGE
+    print(util.dumps(result))
+    return EXIT_OK
+
+
+def cmd_create(args):
+    return _store_command(args, lambda v: store.create(v, _json_input(args)))
+
+
+def cmd_update(args):
+    return _store_command(args, lambda v: store.update(v, args.ref, _json_input(args)))
+
+
+def cmd_archive(args):
+    return _store_command(args, lambda v: store.archive(v, args.ref))
+
+
+def cmd_unarchive(args):
+    return _store_command(args, lambda v: store.unarchive(v, args.ref))
+
+
+def cmd_delete(args):
+    return _store_command(args, lambda v: store.delete(v, args.ref, args.confirm))
+
+
+def cmd_convert(args):
+    if args.action == "plan":
+        return _store_command(args, lambda v: store.convert_plan(v, args.ref, args.to))
+    if args.action == "apply":
+        return _store_command(args, lambda v: store.convert_apply(v, args.ref, args.to, _json_input(args)))
+    return _store_command(args, lambda v: store.finish_conversion(v, args.ref))
+
+
+def cmd_op(args):
+    return _store_command(args, lambda v: pending_mod.apply_operation(v, _json_input(args)))
+
+
+def cmd_log(args):
+    return _store_command(args, lambda v: pending_mod.append_log(v, _json_input(args)))
+
+
+def cmd_pending(args):
+    if args.action == "add":
+        return _store_command(args, lambda v: pending_mod.add(v, _json_input(args)))
+    if args.action == "list":
+        return _store_command(args, lambda v: pending_mod.list_entries(v, prune=args.prune))
+    if not args.id:
+        print("give the pending entry id", file=sys.stderr)
+        return EXIT_USAGE
+    if args.action == "apply":
+        def run(v):
+            edited = _json_input(args)
+            return pending_mod.apply(v, args.id, edited.get("operations") if isinstance(edited, dict) and edited else None)
+        return _store_command(args, run)
+    return _store_command(args, lambda v: pending_mod.reject(v, args.id))
+
+
 def adapter_ops():
     from .adapter import OPERATIONS
     return OPERATIONS
@@ -246,6 +330,29 @@ def build_parser():
     s.add_argument("op", choices=adapter_ops())
     s.add_argument("--args", help="JSON object of arguments")
     s.set_defaults(fn=cmd_adapter)
+    def writer(name, help_, fn, **kw):
+        s = sub.add_parser(name, help=help_)
+        for flag, kwargs in kw.get("args", []):
+            s.add_argument(flag, **kwargs)
+        if kw.get("json", True):
+            s.add_argument("--json", help="the JSON input: the JSON itself, @FILE, or - to read stdin (stdin is never read otherwise)")
+        s.set_defaults(fn=fn)
+        return s
+
+    writer("create", "create an item (JSON: type, impl?, title or name, fields, relations, tags, body); assigns id, slug, timestamps, defaults", cmd_create)
+    writer("update", "change an item (JSON: set, unset, body, revision?); sets updated and completed, moves the file when the path changes", cmd_update,
+           args=[("ref", {})])
+    writer("archive", "move an item to the Archive", cmd_archive, args=[("ref", {})], json=False)
+    writer("unarchive", "restore an archived item", cmd_unarchive, args=[("ref", {})], json=False)
+    writer("delete", "permanently delete an item (needs --confirm permanent)", cmd_delete, args=[("ref", {}), ("--confirm", {})], json=False)
+    s = writer("convert", "convert an item to another implementation of its type: plan | apply (JSON resolutions: drop, rename, fill) | finish", cmd_convert,
+               args=[("action", {"choices": ["plan", "apply", "finish"]}), ("ref", {})])
+    s.add_argument("--to", help="the target implementation id (plan, apply)")
+    writer("op", "apply one rule operation (set_field, set_relation, add_relation, archive, unarchive, create_item) from JSON", cmd_op)
+    writer("log", "append a rule-run line to the automation log (JSON: rule, trigger, event, actions, outcome, ...)", cmd_log)
+    s = writer("pending", "the pending-approval queue: add (JSON proposal) | list [--prune] | apply ID [JSON: edited operations] | reject ID", cmd_pending,
+               args=[("action", {"choices": ["add", "list", "apply", "reject"]}), ("id", {"nargs": "?"})])
+    s.add_argument("--prune", action="store_true", help="list: drop expired entries")
     s = sub.add_parser("approve", help="record the current approval hash of a registered script, or of every unapproved or changed one (--all); show the user the diff first")
     s.add_argument("script", nargs="?")
     s.add_argument("--all", action="store_true")

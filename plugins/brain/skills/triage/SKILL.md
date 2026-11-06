@@ -16,16 +16,16 @@ Items of types `task`, `note`, `project` that are in the Inbox: their placement 
 1. **Propose** (read-only): read the item and the Areas and Projects (and their `defaults`) and return an operation list with a short rationale: `set_relation` for the placement relation, optional `set_field` for something clearly implied by the text, and `convert` only if needed. Do not write anything yet.
 2. The destination implementation is the defaults cascade for the **new** placement (Project, then Area, then Inbox, then built-in). `convert` appears only when it differs from the item's current one.
 3. **Show** the item, the operations as diffs, and the rationale. The user can **approve**, **edit** (placement, implementation override, fields; re-validate), **skip** (stays in the Inbox, not re-offered this session) or **archive** it.
-4. **Apply** approved operations exactly as shown.
+4. **Apply** approved operations exactly as shown, each with `brainctl op` (placement and fields) or the `convert` commands below.
 
 ## Placement relation by type
 `task.belongs_to`, `note.about` (its single Project or Area target), `project.area`. Areas and persons are top-level and are never triaged.
 
 ## Without conversion
-A single update with the revision you read. On `conflict`, re-read and re-propose.
+`brainctl op --json '{"op": "set_relation", "ref": ..., "relation": ..., "value": [...], "revision": "<revision you read>"}'`. On `conflict`, re-read and re-propose.
 
 ## Conversion
-Follow "Conversion" in `../core/references/storage.md`: deterministic mapping, a conversion report (unmapped, invalid and missing fields that the user resolves field by field; fields *filled by default* shown for information), create with the same id, delete the source, and the half-converted marker if the delete fails. The conversion runs only after the user approves the final diff. Trait lists and trait fields carry over only if the target adapter supports traits. Triage back to the original implementation is the only undo.
+Run `brainctl convert plan <ref> --to <impl>` for the deterministic mapping and report, show it, collect the resolutions, show the final diff, then `brainctl convert apply <ref> --to <impl> --json '{"drop": [...], "rename": {...}, "fill": {...}}'`. If the source delete fails the helper writes the marker; `brainctl convert finish <ref>` completes it. See "Conversion" in `../core/references/storage.md`: deterministic mapping, a conversion report (unmapped, invalid and missing fields that the user resolves field by field; fields *filled by default* shown for information), create with the same id, delete the source, and the half-converted marker if the delete fails. The conversion runs only after the user approves the final diff. Trait lists and trait fields carry over only if the target adapter supports traits. Triage back to the original implementation is the only undo.
 
 ## Finish
-Log each operation. Offer **one** git commit at the end of the session ("brain: triage N items"). Conversions on external backends cannot be reverted with git, so always show the diff first.
+The helper logs each write. Offer **one** git commit at the end of the session ("brain: triage N items"). Conversions on external backends cannot be reverted with git, so always show the diff first.
