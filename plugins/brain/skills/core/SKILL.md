@@ -40,6 +40,7 @@ Detail lives in the reference files next to this skill. Read the one you need be
 | `sync [--no-adopt] [--dry-run]` | Detect outside changes, adopt hand-written files, update the seen state; returns `events` and a `report`. |
 | `sync --refresh` | Accept the current state as seen (no events, no adoption), after your own writes. |
 | `list`, `read <ref>` | Items across bindings and the Archive. |
+| `render <template>` / `render --json <value>` | Resolve rule templates (`{{ today }}`, `{{ now }}`, bound lists with filters). Never resolve them yourself. |
 | `id [-n N]`, `slug <title> [--dir D]` | New ULIDs and unique slugs (the latter as the implementation's Slug section directs). |
 | `approve-hash <script>` | The workspace approval hash. |
 

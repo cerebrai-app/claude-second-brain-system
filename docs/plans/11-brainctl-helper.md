@@ -1,6 +1,6 @@
 # 11 — The `brainctl` Helper
 
-Status: **Draft, partly implemented** (`validate`, `sync`, `read`, `list`, `id`, `slug`, `approve-hash`, `approve`; version 0.1.0) · Depends on: [03](03-storage-contract.md), [05](05-automation.md), [07](07-python-workspace.md), [08](08-core-types.md) · Origin: the first rehearsal ([10](10-plugin-skills.md), findings 1 and 2)
+Status: **Draft, partly implemented** (`validate`, `sync`, `read`, `list`, `id`, `slug`, `approve-hash`, `approve`, `render`; version 0.1.0) · Depends on: [03](03-storage-contract.md), [05](05-automation.md), [07](07-python-workspace.md), [08](08-core-types.md) · Origin: the first rehearsal ([10](10-plugin-skills.md), findings 1 and 2)
 
 ## Goal
 
@@ -34,6 +34,7 @@ adopting hand-written files, hashing a script for approval. In the rehearsal, do
 | `validate [--ref R]` | Every mechanical check in the `validate` skill: manifest and config, definitions, items, relations, duplicates across bindings, unadopted files, leftover markers, ignored-path checks, workspace approvals. JSON findings with severity. |
 | `find` | `--type`, `--impl`, repeatable `--where field=value` (dotted paths), `--include-archived`. Items whose fields equal the values; exit 1 when none match. The deterministic lookup behind `unless_exists` (doc 05). |
 | `sync` | Detect: scan all bindings and the Archive, match by ref across bindings, diff against the seen state, **adopt** hand-written files and **complete** the identity fields (slug, title, status, created, updated) of items that have an id but lack them (doc 05), and return the sync report and ordered event list. Updates the seen state, except for externally changed items that fail validation (held back so they are reported again). `--no-adopt` reports without editing files; `--dry-run` writes nothing; `--refresh` accepts the current state as seen (no events, no adoption), for use after the plugin's own writes. Script-adapter bindings are read through `client.py` (doc 12, Client); one that cannot be read is reported as incomplete and its items are never reported as missing. The one-minute `rate_limited` retry applies to script calls. |
+| `render <template> [--vars JSON] [--var N=V] [--now ISO]` / `render --json <value>` | Resolve `{{ today }}`, `{{ now }}` and bound variables with the filters `checklist`, `bullets`, `refs`, `table` (doc 05, Template variables). `--json` resolves every string in a JSON value. Exit 2 on an unknown variable or filter. `templates.py`; `validate` uses the same parser (`rule-template`). |
 | `approve-hash <script>` | The workspace approval hash (below). |
 | `approve <script> \| --all [--by WHO]` | Record the current hash as the approval in `registry.yml` (`approved: {sha256, at, by}`), keeping the file's comments. `--all` covers every script that is unapproved or changed. The skill shows the user the diff first; the command only records the answer. `by` defaults to git `user.email`. |
 | `index rebuild` | Rebuild the derived refs index by scanning frontmatter ids. |
@@ -100,7 +101,7 @@ capture:
 
 ## Package layout and tests
 
-The helper is the package `plugins/brain/tools/brainctl/` (`__main__.py` CLI, `model.py` vault and scanning, `schema.py` field types, `validate.py`, `sync.py`, `approval.py`, `ids.py`, `util.py`, `client.py` (runs script adapters), and for backend authors `adapter.py` and `conformance.py`, doc 12). Setup copies the package without tests or caches. Its tests are pytest tests in `tests/` (see `TESTING.md`): unit tests for ids, schema, scanning and the approval hash; one test per `validate` check; sync tests for baseline, events, adoption, conversions and refresh; CLI tests including the installed-copy layout.
+The helper is the package `plugins/brain/tools/brainctl/` (`__main__.py` CLI, `model.py` vault and scanning, `schema.py` field types, `validate.py`, `sync.py`, `approval.py`, `templates.py`, `ids.py`, `util.py`, `client.py` (runs script adapters), and for backend authors `adapter.py` and `conformance.py`, doc 12). Setup copies the package without tests or caches. Its tests are pytest tests in `tests/` (see `TESTING.md`): unit tests for ids, schema, scanning and the approval hash; one test per `validate` check; sync tests for baseline, events, adoption, conversions and refresh; CLI tests including the installed-copy layout.
 
 ## Implementation order
 

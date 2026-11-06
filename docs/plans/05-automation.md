@@ -192,7 +192,7 @@ Use it whenever the destination is known, for example a journal note placed unde
 
 ### Built-in template variables *(Decided)*
 
-Besides `as:` bindings, templates can use `{{ today }}` (the date, `YYYY-MM-DD`) and `{{ now }}` (UTC instant), resolved from the evaluation context's time zone (doc 04). They are valid in `value`, `text`, `title`, and the string values of `where` and `unless_exists`, so a daily journal rule needs no hand-resolved placeholder. An unknown variable stops the rule.
+Besides `as:` bindings, templates can use `{{ today }}` (the date, `YYYY-MM-DD`) and `{{ now }}` (UTC instant), resolved from the evaluation context's time zone (doc 04). Resolution is deterministic code, not Claude: `brainctl render` (doc 11, `templates.py`). The time zone is `timezone` in `.brain/config.yml` (default UTC). They are valid in `value`, `text`, `title`, and the string values of `where` and `unless_exists`, so a daily journal rule needs no hand-resolved placeholder. An unknown variable stops the rule.
 
 ### Using `surface` results as input to later actions
 

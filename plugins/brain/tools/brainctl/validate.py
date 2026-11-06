@@ -3,7 +3,7 @@ import json
 import os
 import re
 
-from . import CORE_VERSION, approval, model, schema, util
+from . import CORE_VERSION, approval, model, schema, templates, util
 from .model import (ALL_CORE_RELATIONS, CORE_RELATIONS, CORE_STATUS, CORE_TYPES, ENVELOPE_KEYS, NAME_RE, REF_RE, RESERVED,
                     STATUS_TYPES, ULID_RE)
 
@@ -93,6 +93,12 @@ def _check_vault_files(vault, f):
     if vault.manifest is None and not any(c == "manifest-invalid" for c, *_ in vault.load_errors):
         f.error("manifest-missing", ".brain/manifest.yml", "manifest.yml is missing: setup did not finish (run /brain:setup)")
     if vault.config is not None:
+        tz = vault.config.get("timezone")
+        if tz is not None:
+            try:
+                templates.zone(str(tz))
+            except templates.TemplateError:
+                f.error("config-timezone", ".brain/config.yml", f"timezone {tz!r} is not a known IANA time zone (for example Europe/Berlin)")
         archive = vault.config.get("archive")
         if not isinstance(archive, dict) or archive.get("adapter") not in ("markdown", "script"):
             f.error("archive-config", ".brain/config.yml", "config needs archive.adapter (markdown or script)")
@@ -500,6 +506,11 @@ def _check_automation(vault, f):
     if os.path.isfile(vault_file):
         try:
             data = util.load_yaml_file(vault_file) or {}
+            if not isinstance(data, dict):
+                raise ValueError("the file must be a mapping with an `automation:` list")
+            for key in data:
+                if key != "automation":
+                    f.error("automation-invalid", ".brain/automation.yml", f"unknown key {key!r}; the rules go in a top-level `automation:` list")
             vault_rules = data.get("automation") or []
             sources.append(("vault", ".brain/automation.yml", vault_rules, None, True))
         except Exception as exc:
@@ -572,9 +583,15 @@ def _check_rule(vault, rule, subject, owner, is_vault, registry, f):
             elif "min_version" in entry and isinstance(impl.version, int) and impl.version < entry["min_version"]:
                 f.error("rule-blocked", subject, f"blocked: {entry['type']}/{entry['impl']} is version {impl.version}, needs {entry['min_version']}")
     actions = rule.get("do") or []
+    in_scope = set(templates.BUILTINS)
     for action in actions if isinstance(actions, list) else []:
         if not isinstance(action, dict):
             continue
+        for text in templates.strings({k: v for k, v in action.items() if k != "as"}):
+            for problem in templates.check(text, in_scope):
+                f.error("rule-template", subject, problem)
+        if isinstance(action.get("as"), str):
+            in_scope.add(action["as"])                       # a surface binding is visible to the following actions only
         kind = action.get("action")
         if kind == "surface":
             impl = _action_impl(vault, action, owner, subject, required, is_vault, f)

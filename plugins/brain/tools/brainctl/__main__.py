@@ -4,7 +4,7 @@ import json
 import os
 import sys
 
-from . import __version__, approval, client as client_mod, ids, sync as sync_mod, util, validate as validate_mod
+from . import __version__, approval, client as client_mod, ids, sync as sync_mod, templates, util, validate as validate_mod
 from .model import Vault
 
 EXIT_OK, EXIT_FINDINGS, EXIT_USAGE = 0, 1, 2
@@ -165,6 +165,39 @@ def cmd_approve(args):
     return EXIT_OK
 
 
+def cmd_render(args):
+    """Resolve `{{ name }}` templates (built-ins `today` and `now`, plus --vars bindings). Prints text, or JSON with --json."""
+    import datetime as dt
+    vault = Vault(args.vault) if args.vault else Vault.discover(".")
+    try:
+        now = None
+        if args.now:
+            now = dt.datetime.fromisoformat(args.now.replace("Z", "+00:00"))
+        variables = templates.builtins(vault.config_get("timezone") if vault else None, now)
+        if args.vars:
+            text = sys.stdin.read() if args.vars == "-" else (open(args.vars[1:], encoding="utf-8").read() if args.vars.startswith("@") else args.vars)
+            bound = json.loads(text)
+            if not isinstance(bound, dict):
+                raise templates.TemplateError("--vars must be a JSON object of name to value")
+            variables.update(bound)
+        for pair in args.var or []:
+            if "=" not in pair:
+                raise templates.TemplateError(f"--var needs name=value, got {pair!r}")
+            key, value = pair.split("=", 1)
+            variables[key] = value
+        if args.json:
+            data = json.loads(args.template if args.template is not None else sys.stdin.read())
+            print(util.dumps(templates.resolve(data, variables)))
+        else:
+            if args.template is None:
+                raise templates.TemplateError("give a template string (or --json with data)")
+            print(templates.render(args.template, variables))
+    except (templates.TemplateError, ValueError, OSError) as exc:
+        print(util.dumps({"ok": False, "error": "template", "message": str(exc)}))
+        return EXIT_USAGE
+    return EXIT_OK
+
+
 def adapter_ops():
     from .adapter import OPERATIONS
     return OPERATIONS
@@ -215,6 +248,13 @@ def build_parser():
     s.add_argument("--all", action="store_true")
     s.add_argument("--by", help="who approved (default: git user.email)")
     s.set_defaults(fn=cmd_approve)
+    s = sub.add_parser("render", help="resolve {{ today }}, {{ now }} and bound variables in a template string, or in the strings of a JSON value (--json)")
+    s.add_argument("template", nargs="?", help="the template (with --json: a JSON value; omit to read it from stdin)")
+    s.add_argument("--json", action="store_true", help="the input is JSON; every string in it is resolved and the JSON is printed")
+    s.add_argument("--vars", help="JSON object of bindings (name to value, for example a surface result set); @FILE reads a file, - reads stdin")
+    s.add_argument("--var", action="append", metavar="NAME=VALUE", help="a string binding; repeatable")
+    s.add_argument("--now", help="resolve against this instant (ISO 8601) instead of the current time, for tests")
+    s.set_defaults(fn=cmd_render)
     s = sub.add_parser("approve-hash", help="the workspace approval hash of a script (path relative to .brain/python)")
     s.add_argument("script")
     s.set_defaults(fn=cmd_approve_hash)

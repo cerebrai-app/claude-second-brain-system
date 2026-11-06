@@ -3,7 +3,7 @@
 ## Where rules live
 
 - In an implementation's `automation:` list (`.brain/impls/<type>/<impl>.md`): event triggers and `manual`.
-- Vault-level, in `.brain/automation.yml`: **`manual` only** in the MVP, ids namespaced `vault/<id>`, and every rule must list the implementations it needs in `requires: [{type, impl, min_version?}]`. A rule that references an implementation not in `requires`, or one that is missing/too old, is blocked (reported, not run, not deleted).
+- Vault-level, in `.brain/automation.yml` (a mapping whose only key is the `automation:` list): **`manual` only** in the MVP, ids namespaced `vault/<id>`, and every rule must list the implementations it needs in `requires: [{type, impl, min_version?}]`. A rule that references an implementation not in `requires`, or one that is missing/too old, is blocked (reported, not run, not deleted).
 - `schedule` triggers and non-interactive runs are **not supported yet**; reject a rule that uses `on: schedule`.
 
 ## Rule shape
@@ -57,10 +57,16 @@ The main session writes the entry when it dispatches the event list that `brainc
 
 ## Template variables
 
+**Resolve templates with the helper, never by hand:** `brainctl render "<template>" [--vars <json>]`, or `brainctl render --json '<value>'` to resolve every string inside an action. The helper knows `today`, `now` and the filters; `--vars` supplies bindings such as a `surface` result set (`{"todays_tasks": [{"ref", "fields"}, ...]}`). It exits 2 with a message on an unknown variable or filter. `validate` checks every template in a rule (`rule-template`).
+
 Rule values may contain `{{ name }}` templates (`value`, `text`, `title`, and the string values of `where` and `unless_exists`). Built-in variables, resolved from the evaluation context (the user's time zone, doc 04):
 
 - `{{ today }}`: the current date, `YYYY-MM-DD`.
 - `{{ now }}`: the current instant, UTC `YYYY-MM-DDThh:mm:ssZ`.
+
+The time zone is `timezone:` in `.brain/config.yml` (an IANA name such as `Europe/Berlin`; default UTC; `validate` rejects an unknown name).
+
+Filters format a list of items (`{ref, fields}`): `checklist` (`- [ ] title`, `[x]` when the status is `done` or `dropped`), `bullets`, `refs` (comma-separated refs) and `table` (markdown; `title` plus each scalar field). A list or map without a filter is an error.
 
 A `surface` binding added with `as: <name>` is available as `{{ <name> }}` to later actions of the same rule. An unknown variable stops the rule with an error.
 
