@@ -129,7 +129,7 @@ Wiped the vault and ran steps 1 to 10 headless with prompts that name no brainct
 2. **Fixed: `op` demanded `op:` where rules write `action:`.** It now accepts the action as written (0.3.2).
 3. **Fixed: refs were quoted in front matter** (`"project:01M..."`), unlike hand-written files. They are plain now.
 4. **Fixed: `create` gave no way to see the body landed.** The result reports `body_length`.
-5. **Open: definitions are still edited by hand.** Implementations, traits, vault rules and the manifest are written with the Edit tool. `brainctl` writes items only. A command to add an implementation or rule (validating it and updating the manifest) would close the last hand-edited area.
+5. **Fixed: definitions were edited by hand.** `brainctl impl add|update|show`, `rule add|remove|list` and `trait add` (0.4.0) write implementations, rules, traits and the manifest, keep comments, and refuse any change that adds a vault error. Checked headless: given only the goal, the model chose these commands and the manifest diff was two lines.
 6. **Open: `place` with `create_if_missing` creates the area with only the `where` fields,** and a `write_body` target is not handled by `op` (no `write_body` operation yet).
 
 ## Next steps
