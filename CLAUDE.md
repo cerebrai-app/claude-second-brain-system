@@ -33,7 +33,7 @@ See `TESTING.md`. Quick run: `uv run --with pytest --with ruamel.yaml pytest` (o
 Users consume this repo via:
 
 ```
-/plugin marketplace add devinsba/claude-second-brain-system
+/plugin marketplace add cerebrai-app/claude-second-brain-system
 /plugin install brain@claude-second-brain-system
 ```
 

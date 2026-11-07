@@ -75,7 +75,7 @@ Build the vault state, run the helper, assert on findings, events or files. Pref
 
 ## Manual rehearsal on a scratch vault
 
-This is what exercises the skills. Use a throwaway branch of a scratch repo (we used `devinsba/second-brain`, branch `claude/admiring-rubin-4sq9mk`, which starts with only a README and a Python `.gitignore`, a useful trap).
+This is what exercises the skills. Use a throwaway branch of a scratch repo (we used a scratch `second-brain` repo, on a throwaway branch, which starts with only a README and a Python `.gitignore`, a useful trap).
 
 **How to run it**
 - Install the plugin from a local checkout (`/plugin marketplace add <path to this repo>`, then `/plugin install brain@claude-second-brain-system`), start Claude Code **in the scratch repo**, and use the `/brain:*` commands. Until that works in your session, follow each `SKILL.md` by hand, exactly as written, and note every place the text was unclear or wrong.
