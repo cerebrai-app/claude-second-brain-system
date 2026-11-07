@@ -1,7 +1,7 @@
 {
   "name": "claude-second-brain-system",
   "owner": {
-    "name": "cerebrai-app"
+    "name": "cerebr.ai"
   },
   "metadata": {
     "description": "A Second Brain System built around Claude Code",
