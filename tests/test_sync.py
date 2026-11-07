@@ -1,0 +1,362 @@
+"""`brainctl sync`: detection by ref across bindings, adoption of hand-written files, seen state (docs/plans/05)."""
+import json
+import os
+
+from brainctl import sync as sync_mod, util
+
+
+def run(b, **kw):
+    return sync_mod.sync(b.vault(), **kw)
+
+
+def triggers(result, ref=None):
+    return [(e["trigger"], e["ref"]) for e in result["events"] if ref is None or e["ref"] == ref]
+
+
+def of(result, trigger):
+    return [e for e in result["events"] if e["trigger"] == trigger]
+
+
+# ---- baseline ---------------------------------------------------------------------------------------------------------
+
+def test_first_sync_builds_a_silent_baseline(b):
+    b.item("task", "default-task", "tasks", "One", "status: open\n")
+    b.item("note", "default-note", "notes", "Two")
+    result = run(b)
+    assert result["report"]["baseline"] is True and result["events"] == []
+    assert os.path.exists(b.path(".brain/automation/seen/task/default-task.json"))
+
+
+def test_a_second_sync_is_quiet(b):
+    b.item("task", "default-task", "tasks", "One", "status: open\n")
+    run(b)
+    again = run(b)
+    assert again["report"]["baseline"] is False and again["events"] == []
+
+
+def test_seen_state_file_shape(b):
+    i, _ = b.item("task", "default-task", "tasks", "One", "status: open\n")
+    run(b)
+    data = json.load(open(b.path(".brain/automation/seen/task/default-task.json")))
+    entry = data["entries"][f"task:{i}"]
+    assert data["impl"] == "default-task" and "revision" in entry and entry["fields"]["title"] == "One"
+    assert "body" not in entry and "body_sha" in entry                      # no body, only its hash
+
+
+def test_dry_run_writes_nothing(b):
+    b.item("task", "default-task", "tasks", "One", "status: open\n")
+    b.write("notes/by-hand.md", "# By hand\n")
+    result = run(b, dry_run=True)
+    assert result["report"]["adopted"] == [] and result["report"]["unadopted"] == ["notes/by-hand.md"]
+    assert not os.path.exists(b.path(".brain/automation/seen"))
+    assert b.read("notes/by-hand.md") == "# By hand\n"
+
+
+# ---- events -----------------------------------------------------------------------------------------------------------
+
+def test_new_items_fire_create_and_capture_only_in_the_inbox(b):
+    run(b)
+    t, _ = b.item("task", "default-task", "tasks", "Inbox task", "status: open\n")
+    a, _ = b.item("area", "default-area", "areas", "Work")
+    n, _ = b.item("note", "default-note", "notes", "Placed note", f"about: [area:{a}]\n")
+    pers, _ = b.item("person", "default-person", "people", "Pat", name_block="name:\n  given: Pat\n")
+    result = run(b)
+    assert ("create", f"task:{t}") in triggers(result) and ("capture", f"task:{t}") in triggers(result)
+    assert ("capture", f"area:{a}") not in triggers(result)                  # areas are top-level
+    assert ("capture", f"note:{n}") not in triggers(result)                  # placed under an area
+    assert ("capture", f"person:{pers}") not in triggers(result)             # persons are top-level
+    assert all(e["origin"].startswith("external/") and e["depth"] == 0 for e in result["events"])
+    assert [e["origin"] for e in of(result, "create") if e["ref"] == f"task:{t}"] == ["external/task/default-task"]
+
+
+def test_update_lists_what_changed(b):
+    i, _ = b.item("task", "default-task", "tasks", "Draft", "status: open\n")
+    run(b)
+    b.edit("tasks/draft.md", "status: open", "status: done")
+    result = run(b)
+    (event,) = of(result, "update")
+    assert event["ref"] == f"task:{i}" and event["changed"] == ["status"]
+    assert event["before"]["fields"]["status"] == "open" and event["after"]["fields"]["status"] == "done"
+
+
+def test_body_changes_are_reported_as_body(b):
+    b.item("note", "default-note", "notes", "Idea", body="one\n")
+    run(b)
+    b.edit("notes/idea.md", "one\n", "two\n")
+    (event,) = of(run(b), "update")
+    assert event["changed"] == ["body"]
+
+
+def test_relation_changes_also_fire_a_relation_event(b):
+    a1, _ = b.item("area", "default-area", "areas", "A1")
+    a2, _ = b.item("area", "default-area", "areas", "A2")
+    t, _ = b.item("task", "default-task", "tasks", "T", f"status: open\nbelongs_to: [area:{a1}]\n")
+    run(b)
+    b.edit("tasks/t.md", f"belongs_to: [area:{a1}]", f"belongs_to: [area:{a2}]")
+    result = run(b)
+    (rel,) = of(result, "relation")
+    assert rel["relation"] == "belongs_to" and rel["added"] == [f"area:{a2}"] and rel["removed"] == [f"area:{a1}"]
+    assert of(result, "update")[0]["changed"] == ["belongs_to"]
+
+
+def test_a_missing_item_is_reported_not_an_event(b):
+    i, _ = b.item("task", "default-task", "tasks", "Gone", "status: open\n")
+    run(b)
+    b.remove("tasks/gone.md")
+    result = run(b)
+    assert result["events"] == [] and result["report"]["missing"] == [f"task:{i}"]
+
+
+def test_archive_and_unarchive_events(b):
+    i, _ = b.item("note", "default-note", "notes", "Old")
+    run(b)
+    text = b.read("notes/old.md").replace("created:", "archive: archive:archive\narchived_at: 2026-11-06T00:00:00Z\ncreated:")
+    b.remove("notes/old.md")
+    b.write("archive/note/default-note/old.md", text)
+    result = run(b)
+    assert [e["trigger"] for e in result["events"]] == ["archive"] and result["report"]["missing"] == []
+    b.remove("archive/note/default-note/old.md")
+    b.write("notes/old.md", text.replace("archive: archive:archive\narchived_at: 2026-11-06T00:00:00Z\n", ""))
+    assert [e["trigger"] for e in run(b)["events"]] == ["unarchive"]
+
+
+# ---- conversions: matching by ref across bindings --------------------------------------------------------------------
+
+def test_a_conversion_is_one_update_with_the_impl_changed(b):
+    b.impl("task", "gtd", path="tasks/gtd/{slug}.md")
+    i, _ = b.item("task", "default-task", "tasks", "Draft", "status: open\n")
+    run(b)
+    text = b.read("tasks/draft.md").replace("impl: default-task", "impl: gtd")
+    b.remove("tasks/draft.md")
+    b.write("tasks/gtd/draft.md", text)
+    result = run(b)
+    assert triggers(result) == [("update", f"task:{i}")]
+    assert "impl" in result["events"][0]["changed"] and result["events"][0]["impl"] == "gtd"
+    assert result["report"]["missing"] == []
+    assert run(b)["events"] == []
+
+
+def test_an_interrupted_conversion_does_not_hide_the_duplicate(b):
+    b.impl("task", "gtd", path="tasks/gtd/{slug}.md")
+    i, _ = b.item("task", "default-task", "tasks", "Draft", "status: open\n")
+    run(b)
+    b.write("tasks/gtd/draft.md", b.read("tasks/draft.md").replace("impl: default-task", "impl: gtd"))
+    result = run(b)                                               # source still exists: both bindings hold the ref
+    assert len([e for e in result["events"] if e["ref"] == f"task:{i}"]) <= 2
+    from brainctl import validate
+    assert any(f["code"] == "duplicate-ref" for f in validate.validate(b.vault()))
+
+
+# ---- adoption ---------------------------------------------------------------------------------------------------------
+
+def test_a_hand_written_file_is_adopted_additively(b):
+    run(b)
+    original = "# Idea from the bus\nWhat if triage had a mobile view?\n"
+    b.write("notes/idea-from-the-bus.md", original)
+    result = run(b)
+    assert result["report"]["adopted"] == ["notes/idea-from-the-bus.md"]
+    text = b.read("notes/idea-from-the-bus.md")
+    assert text.endswith(original)                                           # body untouched, name unchanged
+    front = util.ParsedFile(text).front
+    assert front["type"] == "note" and front["impl"] == "default-note" and front["slug"] == "idea-from-the-bus"
+    assert front["title"] == "Idea from the bus" and len(front["id"]) == 26
+    assert {"created", "updated"} <= set(front)
+    ref = f"note:{front['id']}"
+    assert (("create", ref) in triggers(result)) and (("capture", ref) in triggers(result))
+    assert run(b)["events"] == []
+
+
+def test_adoption_keeps_existing_keys_and_order(b):
+    run(b)
+    b.write("notes/mine.md", "---\ntitle: Mine\ntags:\n  a: ''\nmood: calm\n---\ntext\n")
+    run(b)
+    text = b.read("notes/mine.md")
+    assert text.index("title: Mine") < text.index("tags:") < text.index("mood: calm")
+    front = util.ParsedFile(text).front
+    assert front["title"] == "Mine" and front["mood"] == "calm" and "id" in front
+
+
+def test_adoption_fills_status_and_schema_defaults(b):
+    b.impl("task", "gtd", fields="    priority: { type: enum, values: [low, med], default: med }\n", path="tasks/gtd/{slug}.md")
+    run(b)
+    b.write("tasks/gtd/call-dentist.md", "# Call the dentist\n")
+    run(b)
+    front = util.ParsedFile(b.read("tasks/gtd/call-dentist.md")).front
+    assert front["status"] == "open" and front["priority"] == "med" and front["title"] == "Call the dentist"
+
+
+def test_a_file_that_cannot_be_valid_is_not_adopted(b):
+    b.impl("task", "gtd", fields="    context: { type: enum, values: [work, home], required: true }\n", path="tasks/gtd/{slug}.md")
+    run(b)
+    b.write("tasks/gtd/needs-context.md", "# Needs context\n")
+    result = run(b)
+    assert b.read("tasks/gtd/needs-context.md") == "# Needs context\n"
+    assert result["report"]["adopted"] == [] and result["report"]["invalid"][0]["path"] == "tasks/gtd/needs-context.md"
+
+
+def test_ambiguous_directories_adopt_nothing(b):
+    b.impl("note", "twin", path="notes/{slug}.md")
+    run(b)
+    b.write("notes/mine.md", "text\n")
+    result = run(b)
+    assert b.read("notes/mine.md") == "text\n"
+    assert [p["code"] for p in result["report"]["problems"]] == ["ambiguous-file"]
+
+
+def test_no_adopt_flag_reports_only(b):
+    run(b)
+    b.write("notes/mine.md", "text\n")
+    result = run(b, adopt=False)
+    assert result["report"]["unadopted"] == ["notes/mine.md"] and b.read("notes/mine.md") == "text\n"
+
+
+def test_person_adoption_uses_a_display_name(b):
+    run(b)
+    b.write("people/pat-jones.md", "# Pat Jones\n")
+    run(b)
+    front = util.ParsedFile(b.read("people/pat-jones.md")).front
+    assert front["name"] == {"display": "Pat Jones"} and front["type"] == "person"
+
+
+def test_a_file_in_the_wrong_directory_is_not_adopted_as_something_else(b):
+    run(b)
+    b.write("notes/claims-task.md", "---\ntype: task\n---\ntext\n")
+    result = run(b)
+    assert result["report"]["adopted"] == [] and result["report"]["invalid"]
+
+
+# ---- invalid external changes -----------------------------------------------------------------------------------------
+
+def test_an_invalid_external_change_runs_no_rules_and_is_reported_until_fixed(b):
+    b.impl("task", "gtd", fields="    due: { type: date }\n", path="tasks/gtd/{slug}.md")
+    i, _ = b.item("task", "gtd", "tasks/gtd", "Draft", "status: open\n")
+    run(b)
+    b.add_front("tasks/gtd/draft.md", "due: someday\n")
+    result = run(b)
+    assert result["events"] == [] and result["report"]["invalid"][0]["ref"] == f"task:{i}"
+    again = run(b)                                       # still reported: the seen state was not advanced
+    assert again["report"]["invalid"] and again["events"] == []
+    b.edit("tasks/gtd/draft.md", "due: someday", "due: 2026-12-01")
+    assert triggers(run(b)) == [("update", f"task:{i}")]
+
+
+# ---- bindings the helper cannot read yet ----------------------------------------------------------------------------
+
+def test_script_bindings_are_reported_incomplete(b):
+    b.write(".brain/impls/task/remote.md", "---\nimpl: remote\nextends: task\nversion: 1\nstorage:\n  adapter: script\n  command: python:remote\n---\n")
+    result = run(b)
+    assert result["report"]["incomplete"] == [{"binding": "task/remote", "reason": "script adapter unavailable: python:remote is not in the Python workspace registry"}]
+
+
+# ---- refresh ----------------------------------------------------------------------------------------------------------
+
+def test_refresh_accepts_the_plugins_own_writes_without_events(b):
+    b.item("task", "default-task", "tasks", "One", "status: open\n")
+    run(b)
+    b.edit("tasks/one.md", "status: open", "status: done")          # a write the plugin made itself
+    refreshed = run(b, refresh=True)
+    assert refreshed["events"] == [] and refreshed["report"]["refreshed"] >= 2
+    assert run(b)["events"] == []                                    # not reported as an outside change later
+
+
+def test_refresh_does_not_adopt_and_does_not_hide_hand_written_files(b):
+    run(b)
+    b.write("notes/by-hand.md", "# By hand\n")
+    result = run(b, refresh=True)
+    assert result["report"]["unadopted"] == ["notes/by-hand.md"] and b.read("notes/by-hand.md") == "# By hand\n"
+    assert run(b)["report"]["adopted"] == ["notes/by-hand.md"]
+
+
+# ---- completing identity fields on files that already have an id ------------------------------------------------------
+
+def hand_note(b, name, ident="01J0000000000000000000000X", extra="", body="Body\n"):
+    b.write(f"notes/{name}.md", f"---\nid: {ident}\ntype: note\nimpl: default-note\n{extra}---\n{body}")
+
+
+def test_an_item_with_an_id_but_no_slug_is_completed(b):
+    hand_note(b, "scribble", extra='title: "Keep me"\ncreated: 2026-11-01T10:00:00Z\nupdated: 2026-11-01T10:00:00Z\ncustom: stays\n', body="Hello\n")
+    result = run(b)
+    assert result["report"]["completed"] == [{"path": "notes/scribble.md", "added": ["slug"]}]
+    text = open(b.path("notes/scribble.md")).read()
+    assert "slug: scribble" in text and 'title: "Keep me"' in text and "custom: stays" in text and text.endswith("---\nHello\n")
+    assert [i.front["slug"] for i in b.vault().scan().items if i.id == "01J0000000000000000000000X"] == ["scribble"]
+
+
+def test_completion_adds_only_identity_fields_not_defaults_or_an_existing_value(b):
+    b.impl("note", "journal", fields="    mood: { type: string, default: calm }\n", path="journal/{slug}.md")
+    b.write("journal/2026-11-06.md", "---\nid: 01J0000000000000000000000Y\ntype: note\nimpl: journal\nslug: custom-slug\ntitle: T\nupdated: 2026-11-01T10:00:00Z\n---\n")
+    result = run(b)
+    assert result["report"]["completed"] == [{"path": "journal/2026-11-06.md", "added": ["created"]}]      # the slug differing from the file name is left to validate
+    text = open(b.path("journal/2026-11-06.md")).read()
+    assert "slug: custom-slug" in text and "mood" not in text
+
+
+def test_a_complete_item_is_not_touched_and_a_second_sync_is_quiet(b):
+    hand_note(b, "scribble")
+    run(b)
+    before = open(b.path("notes/scribble.md")).read()
+    again = run(b)
+    assert again["report"]["completed"] == [] and again["events"] == [] and open(b.path("notes/scribble.md")).read() == before
+
+
+def test_completion_respects_no_adopt_and_dry_run(b):
+    hand_note(b, "scribble")
+    for kw in ({"adopt": False}, {"dry_run": True}):
+        result = run(b, **kw)
+        assert result["report"]["completed"] == []
+        assert result["report"]["incomplete_identity"] == [{"path": "notes/scribble.md", "missing": ["created", "slug", "title", "updated"]}]
+    assert "slug:" not in open(b.path("notes/scribble.md")).read()
+
+
+def test_completing_a_known_item_is_reported_as_an_update(b):
+    hand_note(b, "scribble", extra='title: T\ncreated: 2026-11-01T10:00:00Z\nupdated: 2026-11-01T10:00:00Z\nslug: scribble\n')
+    run(b)
+    b.write("notes/scribble.md", open(b.path("notes/scribble.md")).read().replace("slug: scribble\n", ""))
+    result = run(b)
+    assert [e["trigger"] for e in result["events"]] == ["update"] and result["report"]["completed"] == [{"path": "notes/scribble.md", "added": ["slug"]}]
+
+
+def test_an_implementation_without_a_slug_field_gets_no_slug_on_adoption(b):
+    b.impl("note", "plain", path="plain/{id}.md")
+    run(b)
+    b.write("plain/idea.md", "# Idea\nBody\n")
+    result = run(b)
+    assert result["report"]["adopted"] == ["plain/idea.md"]
+    assert "slug" not in util.ParsedFile(b.read("plain/idea.md")).front
+
+
+def test_created_comes_from_git_history_only_for_a_tracked_file(b):
+    import subprocess
+    git = lambda *a, **kw: subprocess.run(["git", *a], cwd=b.root, check=True, capture_output=True, **kw)
+    run(b)
+    b.write("notes/old.md", "# Old\n")
+    git("add", "-A")
+    env = dict(os.environ, GIT_AUTHOR_DATE="2020-01-02T03:04:05Z", GIT_COMMITTER_DATE="2020-01-02T03:04:05Z")
+    subprocess.run(["git", "commit", "-qm", "old"], cwd=b.root, check=True, env=env, capture_output=True)
+    result = run(b)                                                           # adopts the tracked file: its first commit time
+    assert result["report"]["adopted"] == ["notes/old.md"]
+    import datetime as dt
+    old = dt.datetime(2020, 1, 2, 3, 4, 5, tzinfo=dt.timezone.utc)
+    assert util.ParsedFile(b.read("notes/old.md")).front["created"] == old
+    git("rm", "-q", "-f", "notes/old.md")
+    subprocess.run(["git", "commit", "-qm", "gone"], cwd=b.root, check=True, env=env, capture_output=True)
+    run(b)
+    b.write("notes/old.md", "# Old again\n")                                  # untracked, at a path that once held another file
+    run(b)
+    assert util.ParsedFile(b.read("notes/old.md")).front["created"] != old
+
+
+def test_events_carry_a_stable_id_derived_from_the_transition(b):
+    run(b)
+    ident, slug = b.item("note", "default-note", "notes", "One")
+    first = run(b, dry_run=True)["events"]
+    again = run(b, dry_run=True)["events"]
+    assert [e["trigger"] for e in first] == ["create", "capture"]
+    assert all(e["id"].startswith("ev_") and len(e["id"]) == 19 for e in first)
+    assert first[0]["id"] != first[1]["id"]                                       # create and capture differ
+    assert [e["id"] for e in first] == [e["id"] for e in again]                   # the same change gives the same ids (re-delivery is detectable)
+    assert list(first[0])[0] == "id"
+    run(b)
+    b.write(f"notes/{slug}.md", b.read(f"notes/{slug}.md").replace("title: One", "title: Two"))
+    update = [e for e in run(b)["events"] if e["trigger"] == "update"][0]
+    assert update["ref"] == f"note:{ident}" and update["id"] not in {e["id"] for e in first}

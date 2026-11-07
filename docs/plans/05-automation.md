@@ -1,0 +1,394 @@
+# 05 — Automation
+
+Status: **Draft** · Depends on: [01 — Core Data Model](01-core-data-model.md), [03 — Storage Contract](03-storage-contract.md)
+
+## Goal
+
+Let each implementation declare automation: reactions to things that happen to its items (and to time), made of built-in
+actions, user scripts, and Claude instructions. Anything that can change data without a person looking must be predictable;
+anything that relies on Claude's judgment must be approved first.
+
+## Where automation lives
+
+In the `automation:` list of an implementation definition (doc 01), so it follows the implementation's lifecycle, versioning
+and migrations (doc 02). The `Archive` core type is not extensible and has no automation; *archive/unarchive events on items*
+are triggers for those items' own implementations.
+
+Rules that span several implementations live at the **vault level** instead (next section).
+
+## Vault-level automation
+
+Some rules belong to no single implementation: a daily review that reads `task` items and writes into a `journal` note, a weekly roll-up per
+project. These live in `.brain/automation.yml`, a versioned vault config file whose only key is a `rules:` list (an implementation uses `automation:`), migrated with the vault (doc 02).
+
+**Restrictions** *(Decided)*:
+- Only the **`manual`** trigger in the MVP (**`schedule`** is post-MVP, see Scheduling). Event triggers (`create`, `update`, `capture`, `archive`, `unarchive`, `relation`,
+  `before_delete`) are per-implementation only, so event chains stay attributable to one implementation and loop protection stays simple.
+- Same action set, validation, approval (`claude` per proposal), logging, pending-approval queue and permission rules as implementation rules.
+- Rule ids are namespaced `vault/<id>` in logs, approvals and `/brain run vault/<id>`, so they cannot collide with `<impl>/<rule-id>`.
+
+### `requires`: declared implementations
+
+Every vault rule **must** list the implementations it depends on. A rule with no `requires` is invalid.
+
+```yaml
+rules:                               # .brain/automation.yml
+  - id: daily-journal-tasks
+    requires:
+      - { type: task, impl: task }
+      - { type: note, impl: journal, min_version: 2 }   # min_version optional (implementation version, doc 02)
+      - { type: area, impl: default-area }              # needed because `place` may find or create the Journals area
+    on: manual                           # `schedule` is post-MVP
+    do:
+      - action: surface
+        impl: task                       # explicit: which implementation's named filter/sort
+        filter: actionable-today
+        sort: due-then-priority
+        as: todays_tasks
+        show: false
+      - action: write_body
+        target: { find: { type: note, impl: journal, where: { title: "{{ today }}" } }, create_if_missing: true,
+                  place: { find: { type: area, where: { title: Journals } }, create_if_missing: true } }
+        section: "## Today's tasks"
+        mode: replace_section
+        text: "{{ todays_tasks | checklist }}"
+```
+
+| Key | Meaning |
+|---|---|
+| `type` | The core type (doc 01). |
+| `impl` | The implementation id. Must be bound in the vault. |
+| `min_version` | Optional minimum implementation `version` (doc 01/02). |
+
+- **Closed world:** every implementation a vault rule touches (an `impl:` on `surface`, `find`, `create_item`, a hook's declared reads, etc.) must
+  appear in its `requires`. Load-time validation rejects a rule that references an implementation it did not declare.
+- **Availability check:** a rule whose required implementations are missing, unbound, below `min_version`, or whose adapter is unreachable is **not run**.
+  It is reported (session start and `/brain rules`) as *blocked: missing `<type>/<impl>`*. It is neither deleted nor silently skipped.
+- **Named filters and sorts** are resolved in the implementation given by `impl:`; where a rule uses exactly one required implementation of that
+  type, `impl:` may be omitted.
+- **Used by tooling:** `requires` feeds the migration dry run (doc 02), which flags rules affected when a required implementation is renamed,
+  removed, retyped, or has a referenced field or filter changed.
+
+```yaml
+automation:
+  - id: link-inbox-source            # unique within the implementation; used in logs and approvals
+    on: create
+    do:
+      - action: set_field
+        field: source
+        value: inbox
+  - id: morning-surface
+    on: manual
+    do:
+      - action: surface
+        filter: actionable-today     # a named filter from this implementation (natural language, doc 01)
+        sort: due-then-priority
+  - id: log-completion
+    on: update
+    match: { changed: [status], to: { status: done } }
+    do:
+      - action: hook
+        run: ".brain/hooks/log-completion"
+  - id: triage-suggest
+    on: capture
+    when: "The captured text mentions a deadline or a person's name."
+    do:
+      - action: claude                  # requires approval every time
+        instruction: "Suggest an Area and Project for this item and a due date if one is implied."
+```
+
+## Rule shape
+
+| Key | Meaning |
+|---|---|
+| `id` | Unique within the implementation. |
+| `on` | The trigger (below). |
+| `match` | Optional **structural** condition over the event (types, changed fields, new values, relation names, the item's traits, and namespaced trait fields such as `colleague.employer`). Deterministic. |
+| `when` | Optional **natural-language** condition, judged by Claude (same interpretation model as sorts/filters, doc 01). Evaluated only after `match` passes. A `when` that cannot be judged confidently is treated as **false** and logged. *(Decided: acceptable.)* |
+| `do` | Ordered list of actions. Stops at the first failing action unless it has `on_error: continue`. |
+| `enabled` | Defaults to true. A rule can be disabled without being removed. |
+
+Because `when` involves Claude, it is judged only in an interactive session; in the MVP that is always the case, so `when` is evaluated
+immediately even for sync-detected events. (Post-MVP non-interactive runs cannot judge it and queue the rule as pending.) Rules with only
+`match` are fully deterministic.
+
+## Triggers
+
+| Trigger | Fires when | Event payload |
+|---|---|---|
+| `create` | An item of this implementation is created. | the new envelope |
+| `update` | An item is updated. | before and after envelopes, `changed` field names |
+| `capture` | An item is created in the Inbox area (doc 01), by `/brain capture` or detected by sync. Fires in addition to `create`. After `/brain capture`, the plugin's built-in *Triage now?* offer (doc 06) is shown **after** the `capture` rules for that event have run, so their proposals appear first; it is plugin behavior, not a rule, and is not shown for sync-detected items. | the new envelope |
+| `archive` / `unarchive` | An item moves into or out of the Archive. | envelope |
+| `relation` | A relation is added to or removed from an item: `on: { relation: blocked_by, added: true }`. | envelope, relation name, ref, added/removed |
+| `schedule` | **Post-MVP.** A cron time elapses (see Scheduling). | `{ scheduled_for, fired_at }` |
+| `before_delete` | Just before a **user-requested permanent delete** of an item (doc 03). Synchronous; can veto. See below. | the envelope being deleted, `requested_by` |
+| `manual` | The user invokes the rule by id (`/brain run <impl>/<rule-id>`), optionally on selected items. | selection, or none |
+
+There is no after-the-fact `delete` trigger: the item is gone. The `before_delete` trigger is the only hook into permanent delete.
+
+### `before_delete`
+
+A safeguard that runs **before** a permanent `delete` (doc 03) and can stop it.
+
+- **Fires only** for user-requested permanent deletes, after the plugin's own confirmation prompt and before the `delete` call. It does **not** fire
+  for the internal deletes that complete an `archive` or a triage move (doc 03), since the item lives on. Deletes made outside the plugin cannot be
+  intercepted and are only seen as a *missing item* by reconciliation.
+- **Allowed actions:** `notify`, `surface`, `hook`, `claude`, and `block`. Actions that mutate the item are rejected at load time.
+- **`block`:** `- action: block` with a `reason`; the delete is cancelled and the reason shown to the user. A failing action, or a `hook` that returns
+  `{"ok":false}` or `{"block":true,"reason":"..."}`, also blocks.
+- **Fail closed:** if a matching rule cannot complete (it needs Claude or approval and none is available, a hook errors or times out), the delete does
+  **not** proceed. A `before_delete` rule is never queued as pending; permanent delete is only ever interactive.
+- **Example:**
+  ```yaml
+  - id: keep-linked-projects
+    on: before_delete
+    match: { relation_present: linked_from }   # structural
+    do:
+      - action: block
+        reason: "Still referenced; archive it instead."
+  ```
+- Rules run in definition order; the first `block` wins. Permanent delete remains **unavailable as an automation action**; this trigger can only prevent it.
+
+## Actions
+
+All actions work only through the storage contract (doc 03) and core validation, never by touching files directly, so they behave the
+same on every adapter.
+
+### Built-in actions
+
+| Action | Effect |
+|---|---|
+| `set_field` | Set a field on the triggering item (validated against the schema). |
+| `add_relation` / `remove_relation` | Edit a relation on the triggering item. |
+| `set_relation` | Replace the targets of a single relation on the triggering item (for example a task's `belongs_to`), validated against the allowed targets. Used by triage (doc 06). |
+| `create_item` | Create an item of any type, using the resolved default implementation (doc 01) unless `impl` is given. |
+| `archive` | Archive the triggering item (or a referenced one). |
+| `surface` | Produce a **result set** of items matching a named filter/sort. By default it is shown to the user in the session as a report; with `as:` it is also (or instead, with `show: false`) bound as **input to later actions in the same rule** (below). Read-only. Evaluation is specified in doc 04; a sort used here must have pinned `keys`, and a filter with a pinned interpretation can run unattended; because it needs Claude, a rule using `surface` cannot run unattended unless the needed results are cached and still valid, and is otherwise queued as pending. |
+| `notify` | Emit a message to the user via the session (or a configured notifier hook). |
+
+Built-ins are deterministic and idempotent where possible (`set_field` to the same value is a no-op).
+
+### `convert` (interactive only)
+
+`convert` moves an item to another implementation of the **same core type**, keeping its `id` (mapping, report, apply order and failure handling are in doc 06). It is part of the
+operation set that `claude` proposals and triage can return, but it is **not** available as a standalone rule action, from `hook` results, or in any non-interactive run, because the
+user may need to resolve unmapped, invalid or missing fields in a conversion report before anything is written. As with every `claude` proposal, the exact conversion is shown and
+applied only on approval. It does not fire `create` or `capture` and does not fire `before_delete` for the source delete; the target implementation's rules see an `update`
+(with `changed` including `impl`). Permanent `delete` itself remains unavailable to automation.
+
+### Placing items that automation creates *(Decided)*
+
+`create_item`, and a `write_body` target with `create_if_missing`, accept `place:` to set the new item's **placement relation** (doc 06) for the types that have one (`task.belongs_to`, `note.about`, `project.area`):
+
+- a ref: `place: "area:01J..."`, or
+- a lookup: `place: { find: { type: area, where: { title: Journals } }, create_if_missing: true }`. `find` matches Areas or Projects by their fields (more than one match is an error); with `create_if_missing` a missing one is created with the given `where` fields as its fields (`title` is required) and the default implementation from the doc 01 cascade.
+
+Use it whenever the destination is known, for example a journal note placed under a `Journals` area. Without `place`, the new item has no placement, so it **lands in the Inbox** and becomes a triage candidate (and fires `capture`); loading a rule that creates a `task`, `note` or `project` without `place` is a warning. A vault rule must list the implementations of every type it finds or creates in `requires`.
+
+### Creating only once: `unless_exists` *(Decided)*
+
+`create_item` accepts `unless_exists: { type, impl?, where: { field: value, ... } }`. Before creating, the plugin looks for an item of that type (and implementation, when given) whose fields equal the `where` values (dotted paths such as `colleague.employer` reach nested fields; archived items do not count). If one exists, the action is **skipped**, logged as `skipped: exists` with the existing ref, and the rule carries on; that ref is what a later action or `as:` binding sees. This is the structural way to make a manual rule idempotent (a daily journal note, say) instead of a `when` condition that Claude judges. The lookup is deterministic: `brainctl find --type note --impl journal --where title=2026-11-06` (doc 11). A vault rule must list the implementation in `unless_exists` in `requires`; `validate` rejects a malformed `unless_exists` (`unless-exists`).
+
+### Built-in template variables *(Decided)*
+
+Besides `as:` bindings, templates can use `{{ today }}` (the date, `YYYY-MM-DD`) and `{{ now }}` (UTC instant), resolved from the evaluation context's time zone (doc 04). Resolution is deterministic code, not Claude: `brainctl render` (doc 11, `templates.py`). The time zone is `timezone` in `.brain/config.yml` (default UTC). They are valid in `value`, `text`, `title`, and the string values of `where` and `unless_exists`, so a daily journal rule needs no hand-resolved placeholder. An unknown variable stops the rule.
+
+### Using `surface` results as input to later actions
+
+`surface` can collect items for another operation. `as: <name>` binds the result set (ordered `ref`s plus the `fields` and `relations` of each item,
+no bodies unless `include: [body]`) to a rule-scoped variable, available to the **following actions** of that rule:
+
+- in `value:` / `text:` templates as `{{ <name> }}` (rendered via `format:`, e.g. `checklist`, `bullets`, `table`, `refs`, or a template string);
+- as the `items:` input of `write_body`, `create_item`, `add_relation`, `notify`;
+- as an extra field `surface_results` on the stdin JSON of a `hook`, and as read-only context for a `claude` proposal.
+
+The binding exists only for the current rule run; nothing is stored beyond the run (and the log's counts). Evaluation, caching and the unattended
+limits of `surface` are unchanged (see above and doc 04); a failure to evaluate stops the rule.
+
+Example: write today's actionable tasks into the daily journal note.
+
+```yaml
+- id: daily-journal-tasks
+  on: manual
+  do:
+    - action: surface
+      filter: actionable-today
+      sort: due-then-priority
+      as: todays_tasks
+      show: false
+    - action: write_body
+      target: { find: { type: note, impl: journal, where: { title: "{{ today }}" } }, create_if_missing: true,
+                place: { find: { type: area, where: { title: Journals } }, create_if_missing: true } }
+      section: "## Today's tasks"          # replaced in place; created at the end if absent
+      mode: replace_section
+      text: "{{ todays_tasks | checklist }}"
+```
+
+| Action | Effect |
+|---|---|
+| `write_body` | Edit the markdown `body` of the triggering item or a `target` (a `ref`, or `find` over structural fields with optional `create_if_missing`). `mode`: `replace_section` (default; idempotent, replaces the content under a heading), `append`, `prepend`, `replace`. Requires `supports_body` (doc 03); validated and written through `update` with the read `revision`. `find` matching more than one item is an error. |
+
+### `hook` (script)
+
+Runs a user executable from the brain repo with the event as JSON on stdin and a JSON result on stdout, using the same conventions as
+script adapters (doc 03): one process per call, timeout, error codes, credentials from environment, stderr surfaced on failure.
+A hook may return **operations** (the same operation set as the built-ins, e.g. `{"op":"set_field",...}`), which the plugin validates and applies
+itself, or just `{"ok":true}` if it acts on the outside world. A hook's `run:` may be a path to any executable or `python:<name>`, a registered script in the vault's Python workspace (doc 07), which then follows that doc's approval flow. The plugin shows the command and requires confirmation before the first
+run of a new or changed hook.
+
+### `claude` (natural-language instruction)
+
+A natural-language instruction carried out by Claude. **Every execution requires user approval before anything is applied.**
+
+1. **Propose.** Claude receives the instruction, the event payload and read-only access to the items it needs, and returns a **proposal**:
+   an ordered list of operations from the same operation set as built-ins (`set_field`, `set_relation`, `create_item`, `add_relation`, `archive`, `convert`, `notify`, ...),
+   plus a short rationale. It cannot write, run commands, or call hooks while proposing.
+2. **Review.** The user sees the rule id, the instruction, the triggering event, the exact operations (as diffs) and the rationale.
+3. **Approve / edit / reject.** Approval applies the operations **exactly as shown** through the normal storage and validation path.
+   Editing re-validates. Rejection discards the proposal and is logged.
+4. **Apply deterministically.** After approval, no further Claude judgment is involved: the plugin applies the approved operation list, as the
+   migration script does in doc 02. If any operation fails validation, none are applied (all-or-nothing where the adapter allows; otherwise
+   ordered with the partial-failure rules in doc 03).
+
+There is no "always allow" mode, and no way to pre-approve a rule's shape or "safe" operations. **Approval is always per proposal.** *(Decided.)*
+
+## Execution model
+
+- **Events** are emitted by the plugin's own storage layer after a successful `create`/`update`/`archive`/... through it, and by
+  **reconciliation** for changes made outside the plugin (next subsection).
+- **Matching:** all enabled rules of the item's implementation whose trigger and `match` fit the event are collected, then ordered by their
+  position in the definition. Rules run **sequentially**.
+- **Loop protection:** every event carries `origin` (rule id chain) and a `depth`. Operations performed by a rule emit events with
+  `depth + 1`; a rule never re-fires on an event whose origin chain contains it, and the chain is cut at depth 5 with a logged warning.
+- **Idempotency:** rules should be safe to re-run; the plugin records `(rule id, event id)` for scheduled and recovered runs so a re-delivered
+  event does not apply twice.
+- **Failure:** a failed action logs an error, stops that rule, and does not roll back already-applied earlier actions of the same rule
+  (they are individually valid operations). The user sees failures in the session and in the log.
+- **Logging:** each rule run appends a JSON line to `.brain/automation/log.jsonl` (git-ignored): rule id, trigger, event id, actions,
+  outcome, duration. This also feeds the latency measurement in doc 03. `outcome` is one of: `ok` (the actions ran), `skipped` (needs a `reason`, for example `exists` or `condition`), `queued` (a `claude` proposal was written to the pending queue), `approved-applied` (a pending proposal was approved and applied), `rejected`, `expired`, and `failed` (needs an `error`). `validate` warns about a line outside this vocabulary (`log-outcome`, `log-line`).
+
+### Detecting changes made outside the plugin
+
+Items are also edited by hand (markdown files) or in a backend's own UI. The plugin detects these and emits the same events.
+
+- **When:** at session start and on demand (`/brain sync`), run by a **sync sub-agent** (next subsection) so it does not block the session. Not continuous; there is no daemon.
+- **Seen state:** `.brain/automation/seen/<type>/<impl-id>.json` (git-ignored, rebuildable) holds, per `ref`, the last-seen `revision`
+  and a compact snapshot of `fields` and `relations` (no body). Entries are updated after the plugin's own writes too, so its
+  own changes are not seen as external.
+- **Algorithm per binding:** page through `list` (using `updated_since` where the adapter honors it, otherwise a full paged scan) and compare:
+  - Collect the results of **all bindings of the type** first, then diff, so items are matched **by ref across bindings** *(Decided)*:
+  - ref not in seen state → a **new object**: emit `create` (and `capture` if it is in the Inbox area).
+  - ref seen in one binding and now found in **another** (an implementation conversion done by hand or by an interrupted run) → one `update` with `changed` including `impl`, never a `create` plus a missing item.
+  - `revision` differs → emit `update`, with `before` taken from the snapshot and `changed` computed from the field/relation diff.
+  - item now has `archive` set (moved by hand) → emit `archive`; cleared → `unarchive`.
+  - relation added/removed → also emit `relation` events.
+  - ref in seen state but not found by `read`/`resolve` anywhere (including the Archive) → **not** an event; recorded as a *missing item* in the
+    sync report (permanent delete is not a trigger, and validation reports dangling references per doc 03).
+- **Event marking:** reconciled events carry `origin: external/<type>/<impl-id>` (the core type and implementation id of the binding the change was detected on,
+  e.g. `external/task/my-task-impl`) and `detected_at`; they have `depth: 0`, so rules triggered by them run normally. The leading `external/` segment is what marks an
+  event as sync-detected (see Pending approvals). The body of the payload says `before` is a snapshot (fields/relations only).
+- **Hand-written files** *(Decided: adopted automatically)*. A markdown file inside a binding's directory that lacks the identity fields (`id`, `type`, `impl`) is an **unadopted file**. The sync sub-agent only reports them; the main session **adopts** them at dispatch:
+  - It adds the missing fields to the file's frontmatter: `id` (a new ULID), `type` and `impl` (from the binding), `slug` (the file's name stem; the file keeps its name; only when the implementation declares a `slug` field), `created` (the first git commit time of the file, else its modification time), `updated` (now), and `title` (existing, else the first `#` heading, else the slug in words). Schema `default`s fill absent fields.
+  - It is **additive only**: it never renames the file or changes the body or any existing key, value or key order.
+  - A file whose required fields remain unmet is **not adopted**: it is reported as invalid and left untouched. A directory that matches more than one binding is ambiguous: reported, nothing adopted. Files outside every binding's directory are not scanned.
+  - An adopted file is then a new object: `create` (and `capture` if it is in the Inbox), `origin: external/<type>/<impl-id>`. **Completing incomplete items** *(Decided)*: a file that already has `id`, `type` and `impl` but lacks a `slug` (when the implementation declares one), `title` (or person `name`), `status`, `created` or `updated` gets only those missing fields added, in the same additive way (the slug from the file name, and never a schema default). It is listed in the report as `completed`, the item shows as an `update`, and a value that is present but wrong (a slug that differs from the file name) is left for `validate`. Adoption and completion are the only cases where sync writes to an item, it touches only these fields, it appears in the sync report, and git can undo it.
+- **Validation:** an externally created or changed item is validated against its implementation schema first. If invalid, no rules run on it; it is
+  reported to the user as invalid.
+- **First run:** with no seen state, the plugin builds the baseline silently (no `create` storm). Only changes after the baseline emit events.
+- **External backends** are bound by their own rate limits and latency. The MVP sync sub-agent does not throttle itself (see Sync sub-agent); the cost is logged.
+- Automation does not run for an item whose adapter could not be reached; the failure is reported and the sync resumes next time.
+
+### Sync sub-agent
+
+Reconciliation runs in a dedicated **sub-agent** started at session start, in the background, so the main session is usable immediately.
+
+- **Role (detect only):** it reads through the storage contract (`list`, `read`, `resolve`), compares against the seen state, updates the
+  seen state, and returns a **sync report** (including unadopted files) and an ordered **event list** to the main session. It does **not** adopt files, run rules, apply operations,
+  call hooks, or propose or apply `claude` actions. The main session dispatches the events afterward (deterministic rules immediately, `claude` proposals into the pending queue, see Pending approvals), so approvals, loop protection and
+  logging behave as in the Execution model.
+- **No rate limiting in the MVP** *(Decided)*: the sub-agent does not pace or throttle its requests, and has no backoff beyond the single retry below. Adapters are scanned **in parallel with each other**
+  but each adapter serially, so one slow backend does not block the rest. **One retry on `rate_limited`:** if an adapter returns `rate_limited`
+  (doc 03), the sub-agent waits **one minute** and retries that call once. If the retry is also `rate_limited` (two in a row), it fails that binding. The
+  wait applies only to that adapter; other adapters keep scanning. Any other error, including
+  `unavailable`, gets no retry. When a binding fails, the sub-agent stops that binding for this run, records it as incomplete in the sync report and resumes from its checkpoint next time (below).
+  *Post-MVP:* per-adapter self rate limiting (limits from `describe`, overridable in
+  `.brain/config.yml`; a token bucket; honoring `retry_after` with backoff and jitter) can be added without changing the sync report or checkpoints.
+- **No runtime budget in the MVP** *(Decided)*: a sync run has no wall-clock or request-count limit and runs until every binding is scanned or fails.
+  *Post-MVP:* a per-run budget (`sync.budget`) can be added.
+- **Resumability:** each binding keeps a checkpoint (`cursor` and the high-water `updated_since` mark) in the seen state, so a run that is
+  interrupted or fails a binding (for example after two `rate_limited` in a row) resumes from the checkpoint next time instead of rescanning.
+- **Reporting:** the sub-agent streams progress ("synced 4 of 6 bindings; linear-task incomplete: rate_limited") and ends with the report. The
+  main session may start dispatching events for completed bindings before the whole sync finishes.
+- **Consistency:** the seen state is only advanced for items whose events have been **handed to** the main session; if the session ends before
+  dispatch, those items are re-detected next time (events are keyed by `(ref, revision)` so they dispatch once).
+- Logged timings (per binding: duration, requests, pages) feed the latency measurement in doc 03.
+
+## Scheduling (post-MVP)
+
+**Not in the MVP** *(Decided)*. The `schedule` trigger is reserved but not implemented: a rule using `on: schedule` is rejected at load time with
+"schedule triggers are not supported yet". In the MVP, time-based work is done by running a rule by hand (`manual`, e.g. `/brain run vault/daily-journal-tasks`)
+in an interactive session. The design below is kept so the trigger can be added without changing rule shape.
+
+Claude Code plugins have no always-on process, so schedules cannot fire on their own.
+
+- **Catch-up at session start:** at the start of a session the plugin evaluates each `schedule` rule against its last-run time
+  (stored in `.brain/automation/state.json`, git-ignored) and runs the ones that are due, at most once per missed window (missed runs
+  are not replayed).
+- **External trigger:** the user may run the plugin non-interactively from cron, a CI job or a scheduled Claude Code task
+  (`claude -p "/brain run-due"`). Deterministic rules run; rules that need Claude or approval are queued (see Pending approvals).
+
+## Pending approvals (deferred review)
+
+The pending queue is **in the MVP**, as **deferred approvals** rather than unattended runs. Sync can detect many external changes at once (after days
+away, or a bulk edit in a backend); prompting for every `claude` proposal in the middle of a session would be disruptive, so those wait for the user.
+
+- **What is deferred:** `claude` actions triggered by events whose `origin` starts with `external/` (sync-detected). Deterministic rules on the same
+  events (`match` only, built-ins, hooks) and `when` conditions run **immediately** in the session. `surface` and `manual` runs are not deferred.
+- **Not deferred:** events from the user's own in-session actions (origin is the rule id chain, or none): the proposal is shown right away.
+  `before_delete` rules are never queued (see above).
+- **Queue:** `.brain/automation/pending/<timestamp>-<type>-<impl-id>-<rule-id>.json` (git-ignored), containing the event (with its `external/<type>/<impl-id>`
+  origin) and the proposal if already computed. The `<type>` and `<impl-id>` come from the event's origin; `<rule-id>` is the rule's id within that implementation.
+- **Review:** at session start the plugin reports "N pending approvals". `/brain pending` lists them (grouped by impl id) and lets the user approve,
+  edit or reject each, or reject in bulk. Approval follows the normal flow (doc 05, `claude`): the exact operations are shown as diffs and applied
+  deterministically.
+- **Expiry and staleness:** entries expire after a configurable period (default 14 days). Each is re-evaluated against the current state before
+  approval, since the item may have changed; a proposal that no longer applies is regenerated or dropped with a note.
+
+Post-MVP non-interactive runs (scheduled or external triggers, above) reuse the same queue for rules that need Claude or approval.
+
+## Permissions and safety
+
+- Automation can only perform operations the core model permits, validated like any user change. It cannot change implementation definitions
+  or the automation list itself.
+- `hook` and `claude` actions are the only paths to external effects. Hooks are user code (trusted by explicit confirmation); `claude`
+  actions never act without per-proposal approval.
+- The Archive's permanent `delete` is **not available** to automation actions in the MVP.
+- Rules can be inspected with a command that lists them, their last run and outcome, and any pending approvals.
+
+## Migrations (doc 02)
+
+`automation:` blocks are part of implementation definitions, so a core-version migration may rewrite them. Vault-level rules
+(`.brain/automation.yml`) are migrated the same way, and the dry run uses each rule's `requires` to list every vault rule touched by a change to a
+required implementation (rename, removal, version bump, changed field or filter). A rule whose required implementation no longer exists after
+migration is reported as *blocked*, not removed. The dry run's report lists
+rules whose action names, trigger names or payloads change. Hooks are always listed under *Unhandled items* since they are user code.
+Pending approval files reference rule ids and are discarded (with a note) if their rule no longer exists after migration.
+
+## Open questions
+
+1. ~~Rule scope~~ — resolved: **per implementation only**. (Was: should rules also be definable at **Area or Project level** (e.g. "tasks in this project notify me on completion"), mirroring `defaults` overrides (doc 01), or only per implementation? )
+2. ~~External changes~~ — resolved: **detected and emitted as events**, including new objects (see Detecting changes made outside the plugin). (Was: events for changes made **outside** the plugin (editing markdown by hand, a backend UI): reconcile at session start or ignore?)
+3. ~~Approving a `claude` rule's shape~~ — resolved: **no auto-approve**; approval is per proposal, always.
+4. ~~`before_delete` safeguard~~ — resolved: **added** as a trigger (see `before_delete`), veto-only, fail closed.
+5. ~~Condition language~~ — resolved: **`match` (structural) and `when` (natural language) are sufficient.**
+6. ~~`surface` destinations~~ — resolved: results can be **bound with `as:` and used as input to later actions**, e.g. writing a task list into a daily journal note via `write_body`. (Was: where reports go beyond the session.)
+7. ~~Cross-item and cross-implementation rules~~ — resolved: **event rules stay per-implementation** (a rule on `task` cannot react to a `project` change; model it as a rule on the project that edits its tasks). **Cross-implementation `schedule`/`manual` rules are allowed at the vault level** with a mandatory `requires` list (see Vault-level automation).
+8. ~~Session-start cost~~ — resolved for sync: a **background sync sub-agent** with resumable checkpoints (see Sync sub-agent); **self rate limiting and a run budget are post-MVP**. Resolved, nothing remaining for sync. The "which `schedule` rules are due" question moves with scheduling to post-MVP.
+
+## Next steps
+
+1. Install flow and triage mechanics are specified in [06 — Install Flow and Triage](06-install-and-triage.md).
+2. Decide whether doc 05 moves from **Draft** to reviewed now that its open questions are resolved.
+3. Implement and test the MVP pieces: structural `match`, built-in actions including `write_body` and `surface ... as:`, the `before_delete` veto, the pending queue and `/brain pending`, and the sync sub-agent with its one-minute `rate_limited` retry and checkpoints.
+4. Post-MVP work (`schedule` triggers, non-interactive runs, sync rate limiting, a run budget) is tracked in [Deferred and Out-of-Scope Items](deferred.md).
